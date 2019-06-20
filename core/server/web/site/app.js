@@ -8,13 +8,14 @@ const apps = require('../../services/apps');
 const constants = require('../../lib/constants');
 const storage = require('../../adapters/storage');
 const urlService = require('../../services/url');
-const members = require('../../services/auth/members');
+const urlUtils = require('../../lib/url-utils');
 const sitemapHandler = require('../../data/xml/sitemap/handler');
 const themeMiddleware = require('../../services/themes').middleware;
+const membersService = require('../../services/members');
 const siteRoutes = require('./routes');
 const shared = require('../shared');
 
-const STATIC_IMAGE_URL_PREFIX = `/${urlService.utils.STATIC_IMAGE_URL_PREFIX}`;
+const STATIC_IMAGE_URL_PREFIX = `/${urlUtils.STATIC_IMAGE_URL_PREFIX}`;
 
 let router;
 
@@ -49,6 +50,25 @@ module.exports = function setupSiteApp(options = {}) {
     // /public/ghost-sdk.js
     siteApp.use(shared.middlewares.servePublicFile('public/ghost-sdk.js', 'application/javascript', constants.ONE_HOUR_S));
     siteApp.use(shared.middlewares.servePublicFile('public/ghost-sdk.min.js', 'application/javascript', constants.ONE_YEAR_S));
+
+    // /public/members.js
+    siteApp.get('/public/members-theme-bindings.js',
+        shared.middlewares.labs('members'),
+        shared.middlewares.servePublicFile.createPublicFileMiddleware(
+            'public/members-theme-bindings.js',
+            'application/javascript',
+            constants.ONE_HOUR_S
+        )
+    );
+    siteApp.get('/public/members.js',
+        shared.middlewares.labs('members'),
+        shared.middlewares.servePublicFile.createPublicFileMiddleware(
+            'public/members.js',
+            'application/javascript',
+            constants.ONE_HOUR_S
+        )
+    );
+
     // Serve sitemap.xsl file
     siteApp.use(shared.middlewares.servePublicFile('sitemap.xsl', 'text/xsl', constants.ONE_DAY_S));
 
@@ -70,17 +90,39 @@ module.exports = function setupSiteApp(options = {}) {
     require('../../helpers').loadCoreHelpers();
     debug('Helpers done');
 
+    // @TODO only loads this stuff if members is enabled
     // Set req.member & res.locals.member if a cookie is set
-    siteApp.use(members.authenticateMembersToken);
+    siteApp.post('/members/ssr', shared.middlewares.labs.members, function (req, res) {
+        membersService.api.ssr.exchangeTokenForSession(req, res).then(() => {
+            res.writeHead(200);
+            res.end();
+        }).catch((err) => {
+            res.writeHead(err.statusCode);
+            res.end(err.message);
+        });
+    });
+    siteApp.delete('/members/ssr', shared.middlewares.labs.members, function (req, res) {
+        membersService.api.ssr.deleteSession(req, res).then(() => {
+            res.writeHead(204);
+            res.end();
+        }).catch((err) => {
+            res.writeHead(err.statusCode);
+            res.end(err.message);
+        });
+    });
+    siteApp.use(function (req, res, next) {
+        membersService.api.ssr.getMemberDataFromSession(req, res).then((member) => {
+            req.member = member;
+            next();
+        }).catch(() => {
+            // @TODO log error?
+            req.member = null;
+            next();
+        });
+    });
     siteApp.use(function (req, res, next) {
         res.locals.member = req.member;
         next();
-    });
-    siteApp.use(function (err, req, res, next) {
-        if (err.name === 'UnauthorizedError') {
-            return next();
-        }
-        next(err);
     });
 
     // Theme middleware

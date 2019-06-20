@@ -1,13 +1,15 @@
 const debug = require('ghost-ignition').debug('services:routing:controllers:entry'),
     url = require('url'),
     urlService = require('../../url'),
-    filters = require('../../../filters'),
+    urlUtils = require('../../../lib/url-utils'),
     helpers = require('../helpers');
 
 /**
- * @TODO:
- *   - use `filter` for `findOne`?
- *   - always execute `next` until no router want's to serve and 404's
+ * @description Entry controller.
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ * @returns {Promise}
  */
 module.exports = function entryController(req, res, next) {
     debug('entryController', res.routerOptions);
@@ -31,7 +33,9 @@ module.exports = function entryController(req, res, next) {
             // CASE: last param is of url is /edit, redirect to admin
             if (lookup.isEditURL) {
                 debug('redirect. is edit url');
-                return urlService.utils.redirectToAdmin(302, res, `/editor/${res.routerOptions.resourceType.replace(/s$/, '')}/${entry.id}`);
+                const resourceType = entry.page ? 'page' : 'post';
+
+                return urlUtils.redirectToAdmin(302, res, `/editor/${resourceType}/${entry.id}`);
             }
 
             /**
@@ -65,15 +69,16 @@ module.exports = function entryController(req, res, next) {
              * Ensure we redirect to the correct post url including subdirectory.
              *
              * @NOTE:
-             * This file is used for v0.1 and v2. v0.1 returns relative urls, v2 returns absolute urls.
+             * Keep in mind, that the logic here is used for v0.1 and v2.
+             * v0.1 returns relative urls, v2 returns absolute urls.
              *
              * @TODO:
              * Simplify if we drop v0.1.
              */
-            if (urlService.utils.absoluteToRelative(entry.url, {withoutSubdirectory: true}) !== req.path) {
+            if (urlUtils.absoluteToRelative(entry.url, {withoutSubdirectory: true}) !== req.path) {
                 debug('redirect');
 
-                return urlService.utils.redirect301(res, url.format({
+                return urlUtils.redirect301(res, url.format({
                     pathname: url.parse(entry.url).pathname,
                     search: url.parse(req.originalUrl).search
                 }));
@@ -81,8 +86,8 @@ module.exports = function entryController(req, res, next) {
 
             helpers.secure(req, entry);
 
-            filters.doFilter('prePostsRender', entry, res.locals)
-                .then(helpers.renderEntry(req, res));
+            const renderer = helpers.renderEntry(req, res);
+            return renderer(entry);
         })
         .catch(helpers.handleError(next));
 };

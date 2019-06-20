@@ -5,10 +5,6 @@ Most of the work has been done by [Radoslav Gatev](https://www.gatevnotes.com/in
 
 I documented my installation process, with additional steps to add Sendgrid, SSL, Azure Search, etc. on [my blog](https://blog.yannickreekmans.be/tag/ghost-tag/).
 
-## Why two branches?
-The first branch (__azure__) gets updated as soon as a new release of Ghost is published in their [repository](https://github.com/TryGhost/Ghost), and this gets then automatically deployed to my staging slot.  
-Once I have manually validated the new version on staging, I merge __azure__ into __azure-prod__ which then get automatically deployed to my production slot.  
-
 ## Installation methods
 In any case I suggest forking my repository into your own, this to avoid changes I make to my repository to negatively impact your installation.
 

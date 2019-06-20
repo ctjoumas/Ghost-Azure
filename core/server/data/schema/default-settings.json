@@ -11,6 +11,9 @@
         },
         "session_secret": {
             "defaultValue": null
+        },
+        "theme_session_secret": {
+            "defaultValue": null
         }
     },
     "blog": {
@@ -101,14 +104,6 @@
     "theme": {
         "active_theme": {
             "defaultValue": "casper"
-        }
-    },
-    "app": {
-        "active_apps": {
-            "defaultValue": "[]"
-        },
-        "installed_apps": {
-            "defaultValue": "[]"
         }
     },
     "private": {

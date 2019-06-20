@@ -4,9 +4,15 @@ const _ = require('lodash'),
     security = require('../../../lib/security'),
     urlService = require('../../../services/url'),
     themes = require('../../themes'),
-    filters = require('../../../filters'),
     helpers = require('../helpers');
 
+/**
+ * @description Collection controller.
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ * @returns {Promise}
+ */
 module.exports = function collectionController(req, res, next) {
     debug('collectionController', req.params, res.routerOptions);
 
@@ -48,7 +54,17 @@ module.exports = function collectionController(req, res, next) {
 
             debug(result.posts.length);
 
-            // CASE: does this post belong to this collection?
+            /**
+             * CASE:
+             *
+             * Does this post belong to this collection?
+             * A post can only live in one collection. If you make use of multiple collections and you mis-use your routes.yaml,
+             * it can happen that your database query will load the same posts, but we cannot show a post on two
+             * different urls. This helper is only a prevention, but it's not a solution for the user, because
+             * it will break pagination (e.g. you load 10 posts from database, but you only render 9).
+             *
+             * People should always invert their filters to ensure that the database query loads unique posts per collection.
+             */
             result.posts = _.filter(result.posts, (post) => {
                 if (urlService.owns(res.routerOptions.identifier, post.id)) {
                     return post;
@@ -58,22 +74,16 @@ module.exports = function collectionController(req, res, next) {
             });
 
             // Format data 1
-            // @TODO: figure out if this can be removed, it's supposed to ensure that absolutely URLs get generated
-            // correctly for the various objects, but I believe it doesn't work and a different approach is needed.
+            // @TODO: See helpers/secure for explanation.
             helpers.secure(req, result.posts);
 
-            // @TODO: get rid of this O_O
+            // @TODO: See helpers/secure for explanation.
             _.each(result.data, function (data) {
                 helpers.secure(req, data);
             });
 
-            // @TODO: properly design these filters
-            filters.doFilter('prePostsRender', result.posts, res.locals)
-                .then(function (posts) {
-                    result.posts = posts;
-                    return result;
-                })
-                .then(helpers.renderEntries(req, res));
+            const renderer = helpers.renderEntries(req, res);
+            return renderer(result);
         })
         .catch(helpers.handleError(next));
 };

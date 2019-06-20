@@ -1,15 +1,19 @@
 const debug = require('ghost-ignition').debug('services:routing:static-pages-router');
-const urlService = require('../url');
+const urlUtils = require('../../lib/url-utils');
 const ParentRouter = require('./ParentRouter');
 const controllers = require('./controllers');
 const common = require('../../lib/common');
 
+/**
+ * @description Resource: pages
+ */
 class StaticPagesRouter extends ParentRouter {
     constructor(RESOURCE_CONFIG) {
         super('StaticPagesRouter');
 
         this.RESOURCE_CONFIG = RESOURCE_CONFIG.QUERY.page;
 
+        // @NOTE: Permalink is always /:slug, not configure able
         this.permalinks = {
             value: '/:slug/'
         };
@@ -20,7 +24,7 @@ class StaticPagesRouter extends ParentRouter {
             // @NOTE: url options are only required when registering urls in express.
             //        e.g. the UrlService will access the routes and doesn't want to know about possible url options
             if (options.withUrlOptions) {
-                return urlService.utils.urlJoin(this.permalinks.value, '/:options(edit)?/');
+                return urlUtils.urlJoin(this.permalinks.value, '/:options(edit)?/');
             }
 
             return this.permalinks.value;
@@ -31,7 +35,12 @@ class StaticPagesRouter extends ParentRouter {
         this._registerRoutes();
     }
 
+    /**
+     * @description Register all routes of this router.
+     * @private
+     */
     _registerRoutes() {
+        // REGISTER: prepare context
         this.router().use(this._prepareContext.bind(this));
 
         this.router().param('slug', this._respectDominantRouter.bind(this));
@@ -42,6 +51,13 @@ class StaticPagesRouter extends ParentRouter {
         common.events.emit('router.created', this);
     }
 
+    /**
+     * @description Prepare context for futher middlewares/controllers.
+     * @param {Object} req
+     * @param {Object} res
+     * @param {Function} next
+     * @private
+     */
     _prepareContext(req, res, next) {
         res.routerOptions = {
             type: 'entry',
@@ -55,10 +71,18 @@ class StaticPagesRouter extends ParentRouter {
         next();
     }
 
+    /**
+     * @description Resource type.
+     * @returns {string}
+     */
     getResourceType() {
         return 'pages';
     }
 
+    /**
+     * @description This router has no index/default route. "/:slug/" is dynamic.
+     * @returns {null}
+     */
     getRoute() {
         return null;
     }

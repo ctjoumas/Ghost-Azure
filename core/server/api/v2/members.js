@@ -1,4 +1,4 @@
-const memberUserObject = require('../../services/members').api.memberUserObject;
+const memberUserObject = require('../../services/members').api.members;
 
 const members = {
     docName: 'members',
@@ -28,6 +28,26 @@ const members = {
         permissions: true,
         query(frame) {
             return memberUserObject.get(frame.data, frame.options);
+        }
+    },
+
+    destroy: {
+        statusCode: 204,
+        headers: {},
+        options: [
+            'id'
+        ],
+        validation: {
+            options: {
+                id: {
+                    required: true
+                }
+            }
+        },
+        permissions: true,
+        query(frame) {
+            frame.options.require = true;
+            return memberUserObject.destroy(frame.options).return(null);
         }
     }
 };

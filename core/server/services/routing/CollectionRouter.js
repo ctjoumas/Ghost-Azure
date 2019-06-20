@@ -1,12 +1,17 @@
 const debug = require('ghost-ignition').debug('services:routing:collection-router');
 const common = require('../../lib/common');
-const urlService = require('../url');
+const urlUtils = require('../../lib/url-utils');
 const ParentRouter = require('./ParentRouter');
 
 const controllers = require('./controllers');
 const middlewares = require('./middlewares');
 const RSSRouter = require('./RSSRouter');
 
+/**
+ * @description Collection Router for post resource.
+ *
+ * Fundamental router to define where resources live and how their url structure is.
+ */
 class CollectionRouter extends ParentRouter {
     constructor(mainRoute, object, RESOURCE_CONFIG) {
         super('CollectionRouter');
@@ -15,7 +20,7 @@ class CollectionRouter extends ParentRouter {
 
         this.routerName = mainRoute === '/' ? 'index' : mainRoute.replace(/\//g, '');
 
-        // NOTE: index/parent route e.g. /, /podcast/, /magic/ ;)
+        // NOTE: this.route === index/parent route e.g. /, /podcast/, /magic/
         this.route = {
             value: mainRoute
         };
@@ -41,7 +46,7 @@ class CollectionRouter extends ParentRouter {
             // @NOTE: url options are only required when registering urls in express.
             //        e.g. the UrlService will access the routes and doesn't want to know about possible url options
             if (options.withUrlOptions) {
-                return urlService.utils.urlJoin(this.permalinks.value, '/:options(edit)?/');
+                return urlUtils.urlJoin(this.permalinks.value, '/:options(edit)?/');
             }
 
             return this.permalinks.value;
@@ -55,6 +60,10 @@ class CollectionRouter extends ParentRouter {
         this._listeners();
     }
 
+    /**
+     * @description Register all routes of this router.
+     * @private
+     */
     _registerRoutes() {
         // REGISTER: context middleware for this collection
         this.router().use(this._prepareEntriesContext.bind(this));
@@ -64,7 +73,7 @@ class CollectionRouter extends ParentRouter {
 
         // REGISTER: enable pagination by default
         this.router().param('page', middlewares.pageParam);
-        this.mountRoute(urlService.utils.urlJoin(this.route.value, 'page', ':page(\\d+)'), controllers.collection);
+        this.mountRoute(urlUtils.urlJoin(this.route.value, 'page', ':page(\\d+)'), controllers.collection);
 
         // REGISTER: is rss enabled?
         if (this.rss) {
@@ -85,8 +94,7 @@ class CollectionRouter extends ParentRouter {
     }
 
     /**
-     * We attach context information of the router to the request.
-     * By this we can e.g. access the router options in controllers.
+     * @description Prepare index context for further middlewares/controllers.
      */
     _prepareEntriesContext(req, res, next) {
         res.routerOptions = {
@@ -108,12 +116,19 @@ class CollectionRouter extends ParentRouter {
         next();
     }
 
+    /**
+     * @description Prepare entry context for further middlewares/controllers.
+     */
     _prepareEntryContext(req, res, next) {
         res.routerOptions.context = ['post'];
         res.routerOptions.type = 'entry';
         next();
     }
 
+    /**
+     * @description This router has listeners to react on changes which happen in Ghost.
+     * @private
+     */
     _listeners() {
         /**
          * CASE: timezone changes
@@ -126,6 +141,11 @@ class CollectionRouter extends ParentRouter {
         common.events.on('settings.active_timezone.edited', this._onTimezoneEditedListener);
     }
 
+    /**
+     * @description Helper function to handle a timezone change.
+     * @param settingModel
+     * @private
+     */
     _onTimezoneEdited(settingModel) {
         const newTimezone = settingModel.attributes.value,
             previousTimezone = settingModel._previousAttributes.value;
@@ -136,26 +156,43 @@ class CollectionRouter extends ParentRouter {
 
         if (this.getPermalinks().getValue().match(/:year|:month|:day/)) {
             debug('_onTimezoneEdited: trigger regeneration');
+
+            // @NOTE: The connected url generator will listen on this event and regenerate urls.
             this.emit('updated');
         }
     }
 
+    /**
+     * @description Get resource type of this router (always "posts")
+     * @returns {string}
+     */
     getResourceType() {
+        // @TODO: resourceAlias can be removed? We removed it. Looks like a last left over. Needs double checking.
         return this.RESOURCE_CONFIG.resourceAlias || this.RESOURCE_CONFIG.resource;
     }
 
+    /**
+     * @description Get index route e.g. /, /blog/
+     * @param {Object} options
+     * @returns {String}
+     */
     getRoute(options) {
         options = options || {};
 
-        return urlService.utils.createUrl(this.route.value, options.absolute, options.secure);
+        return urlUtils.createUrl(this.route.value, options.absolute, options.secure);
     }
 
+    /**
+     * @description Generate rss url.
+     * @param {Object} options
+     * @returns {String}
+     */
     getRssUrl(options) {
         if (!this.rss) {
             return null;
         }
 
-        return urlService.utils.createUrl(urlService.utils.urlJoin(this.route.value, this.rssRouter.route.value), options.absolute, options.secure);
+        return urlUtils.createUrl(urlUtils.urlJoin(this.route.value, this.rssRouter.route.value), options.absolute, options.secure);
     }
 
     reset() {
