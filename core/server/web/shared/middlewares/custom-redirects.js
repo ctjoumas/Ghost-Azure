@@ -5,7 +5,7 @@ const path = require('path');
 const debug = require('ghost-ignition').debug('web:shared:mw:custom-redirects');
 const config = require('../../../config');
 const common = require('../../../lib/common');
-const redirectsService = require('../../../../frontend/services/redirects');
+const validation = require('../../../data/validation');
 
 const _private = {};
 
@@ -19,7 +19,7 @@ _private.registerRoutes = () => {
     try {
         let redirects = fs.readFileSync(path.join(config.getContentPath('data'), 'redirects.json'), 'utf-8');
         redirects = JSON.parse(redirects);
-        redirectsService.validation.validate(redirects);
+        validation.validateRedirects(redirects);
 
         redirects.forEach((redirect) => {
             /**
@@ -72,7 +72,7 @@ _private.registerRoutes = () => {
             common.logging.error(new common.errors.IncorrectUsageError({
                 message: common.i18n.t('errors.middleware.redirects.register'),
                 context: err.message,
-                help: 'https://ghost.org/docs/api/handlebars-themes/routing/redirects/'
+                help: 'https://docs.ghost.org/concepts/redirects/'
             }));
         }
     }
@@ -82,7 +82,7 @@ _private.registerRoutes = () => {
 
 /**
  * - you can extend Ghost with a custom redirects file
- * - see https://github.com/TryGhost/Ghost/issues/7707 and https://ghost.org/docs/api/handlebars-themes/routing/redirects/
+ * - see https://github.com/TryGhost/Ghost/issues/7707 and https://docs.ghost.org/concepts/redirects/
  * - file loads synchronously, because we need to register the routes before anything else
  */
 exports.use = function use(siteApp) {

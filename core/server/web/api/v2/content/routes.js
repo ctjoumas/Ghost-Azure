@@ -6,7 +6,7 @@ const mw = require('./middleware');
 module.exports = function apiRoutes() {
     const router = express.Router();
 
-    router.use(cors());
+    router.options('*', cors());
 
     const http = apiv2.http;
 

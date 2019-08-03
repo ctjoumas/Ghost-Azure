@@ -105,7 +105,7 @@ const STAGES = {
         const tasks = [];
 
         // CASE: it's required to put the permission key to avoid security holes
-        if (!Object.prototype.hasOwnProperty.call(apiImpl, 'permissions')) {
+        if (!apiImpl.hasOwnProperty('permissions')) {
             return Promise.reject(new common.errors.IncorrectUsageError());
         }
 

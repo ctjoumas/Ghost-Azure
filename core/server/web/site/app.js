@@ -4,14 +4,13 @@ const express = require('express');
 
 // App requires
 const config = require('../../config');
-const common = require('../../lib/common');
 const apps = require('../../services/apps');
 const constants = require('../../lib/constants');
 const storage = require('../../adapters/storage');
-const urlService = require('../../../frontend/services/url');
-const urlUtils = require('../../../server/lib/url-utils');
-const sitemapHandler = require('../../../frontend/services/sitemap/handler');
-const themeMiddleware = require('../../../frontend/services/themes').middleware;
+const urlService = require('../../services/url');
+const urlUtils = require('../../lib/url-utils');
+const sitemapHandler = require('../../data/xml/sitemap/handler');
+const themeMiddleware = require('../../services/themes').middleware;
 const membersService = require('../../services/members');
 const siteRoutes = require('./routes');
 const shared = require('../shared');
@@ -88,37 +87,35 @@ module.exports = function setupSiteApp(options = {}) {
     // We do this here, at the top level, because helpers require so much stuff.
     // Moving this to being inside themes, where it probably should be requires the proxy to be refactored
     // Else we end up with circular dependencies
-    require('../../../frontend/helpers').loadCoreHelpers();
+    require('../../helpers').loadCoreHelpers();
     debug('Helpers done');
 
     // @TODO only loads this stuff if members is enabled
     // Set req.member & res.locals.member if a cookie is set
     siteApp.post('/members/ssr', shared.middlewares.labs.members, function (req, res) {
-        membersService.ssr.exchangeTokenForSession(req, res).then(() => {
+        membersService.api.ssr.exchangeTokenForSession(req, res).then(() => {
             res.writeHead(200);
             res.end();
         }).catch((err) => {
-            common.logging.warn(err.message);
             res.writeHead(err.statusCode);
             res.end(err.message);
         });
     });
     siteApp.delete('/members/ssr', shared.middlewares.labs.members, function (req, res) {
-        membersService.ssr.deleteSession(req, res).then(() => {
+        membersService.api.ssr.deleteSession(req, res).then(() => {
             res.writeHead(204);
             res.end();
         }).catch((err) => {
-            common.logging.warn(err.message);
             res.writeHead(err.statusCode);
             res.end(err.message);
         });
     });
     siteApp.use(function (req, res, next) {
-        membersService.ssr.getMemberDataFromSession(req, res).then((member) => {
+        membersService.api.ssr.getMemberDataFromSession(req, res).then((member) => {
             req.member = member;
             next();
-        }).catch((err) => {
-            common.logging.warn(err.message);
+        }).catch(() => {
+            // @TODO log error?
             req.member = null;
             next();
         });
@@ -147,7 +144,7 @@ module.exports = function setupSiteApp(options = {}) {
     config.get('apps:internal').forEach((appName) => {
         const app = require(path.join(config.get('paths').internalAppPath, appName));
 
-        if (Object.prototype.hasOwnProperty.call(app, 'setupMiddleware')) {
+        if (app.hasOwnProperty('setupMiddleware')) {
             app.setupMiddleware(siteApp);
         }
     });

@@ -109,7 +109,6 @@ class SettingsImporter extends BaseImporter {
     }
 
     generateIdentifier() {
-        this.stripProperties(['id']);
         return Promise.resolve();
     }
 

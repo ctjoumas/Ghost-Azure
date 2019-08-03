@@ -13,7 +13,7 @@ debug('Required ghost');
 
 express = require('express');
 common = require('./core/server/lib/common');
-urlService = require('./core/frontend/services/url');
+urlService = require('./core/server/services/url');
 parentApp = express();
 
 debug('Initialising Ghost');

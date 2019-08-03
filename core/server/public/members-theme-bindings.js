@@ -527,10 +527,6 @@ module.exports = function layer2(options) {
     gatewayUrl: gatewayUrl,
     container: container
   });
-  function postMessage(frame, data) {
-    var origin = new URL(frame.getAttribute('src')).origin;
-    frame.contentWindow.postMessage(data, origin);
-  }
   var loadAuth = loadFrame(authUrl, container).then(function(frame) {
     frame.style.position = 'fixed';
     frame.style.width = '100%';
@@ -544,10 +540,7 @@ module.exports = function layer2(options) {
     var query = arguments[1] !== (void 0) ? arguments[1] : '';
     return loadAuth.then(function(frame) {
       return new Promise(function(resolve) {
-        postMessage(frame, {
-          hash: hash,
-          query: query
-        });
+        frame.src = (authUrl + "#" + hash + "?" + query);
         frame.style.display = 'block';
         window.addEventListener('message', function messageListener(event) {
           if (event.source !== frame.contentWindow) {
@@ -785,10 +778,8 @@ var each = require('lodash/each');
 var browserAuth = require('@tryghost/members-browser-auth');
 module.exports.init = init;
 function init($__0) {
-  var $__1 = $__0,
-      membersUrl = $__1.membersUrl,
-      ssrUrl = $__1.ssrUrl;
-  var auth = browserAuth({membersUrl: membersUrl});
+  var siteUrl = $__0.siteUrl;
+  var auth = browserAuth({membersUrl: siteUrl + '/members'});
   var $__2 = window.location.hash.match(/^#([^?]+)\??(.*)$/) || [],
       hashMatch = $__2[0],
       hash = $__2[1],
@@ -806,7 +797,7 @@ function init($__0) {
   }
   auth.on('signedin', function() {
     auth.getSSRToken({fresh: true}).then(function(token) {
-      createSession(token, ssrUrl);
+      createSession(token);
     });
   });
   auth.on('signedout', function() {
@@ -814,13 +805,13 @@ function init($__0) {
   });
   function signout() {
     auth.signout().then((function() {
-      return destroySession(ssrUrl);
+      return destroySession();
     })).then(reload);
   }
   function signin() {
     auth.signin().then((function() {
       return auth.getSSRToken({fresh: true}).then(function(token) {
-        return createSession(token, ssrUrl);
+        return createSession(token);
       });
     })).then(reload);
   }
@@ -830,14 +821,14 @@ function init($__0) {
         coupon = ($__6 = $__5.coupon) === void 0 ? '' : $__6;
     auth.signup({coupon: coupon}).then((function() {
       return auth.getSSRToken({fresh: true}).then(function(token) {
-        return createSession(token, ssrUrl);
+        return createSession(token);
       });
     })).then(reload);
   }
   function upgrade() {
     auth.upgrade().then((function() {
       return auth.getSSRToken({fresh: true}).then(function(token) {
-        return createSession(token, ssrUrl);
+        return createSession(token);
       });
     })).then(reload);
   }
@@ -876,8 +867,8 @@ function reload(success) {
     window.location.reload();
   }
 }
-function createSession(token, ssrUrl) {
-  return fetch(ssrUrl, {
+function createSession(token) {
+  return fetch('/members/ssr', {
     method: 'post',
     credentials: 'include',
     body: token
@@ -885,8 +876,8 @@ function createSession(token, ssrUrl) {
     return !!res.ok;
   });
 }
-function destroySession(ssrUrl) {
-  return fetch(ssrUrl, {method: 'delete'}).then(function(res) {
+function destroySession() {
+  return fetch('/members/ssr', {method: 'delete'}).then(function(res) {
     return !!res.ok;
   });
 }

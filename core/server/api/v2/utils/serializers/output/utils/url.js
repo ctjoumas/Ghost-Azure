@@ -1,5 +1,5 @@
 const _ = require('lodash');
-const urlService = require('../../../../../../../frontend/services/url');
+const urlService = require('../../../../../../services/url');
 const urlUtils = require('../../../../../../lib/url-utils');
 const localUtils = require('../../../index');
 
@@ -24,9 +24,11 @@ const forPost = (id, attrs, frame) => {
      */
     if (!localUtils.isContentAPI(frame)) {
         if (attrs.status !== 'published' && attrs.url.match(/\/404\//)) {
-            attrs.url = urlUtils.urlFor({
-                relativeUrl: urlUtils.urlJoin('/p', attrs.uuid, '/')
-            }, null, true);
+            attrs.url = urlService
+                .utils
+                .urlFor({
+                    relativeUrl: urlUtils.urlJoin('/p', attrs.uuid, '/')
+                }, null, true);
         }
     }
 

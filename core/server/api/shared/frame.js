@@ -45,15 +45,15 @@ class Frame {
                 apiConfig.options = apiConfig.options(this);
             }
 
-            if (Object.prototype.hasOwnProperty.call(this.original, 'query')) {
+            if (this.original.hasOwnProperty('query')) {
                 Object.assign(this.options, _.pick(this.original.query, apiConfig.options));
             }
 
-            if (Object.prototype.hasOwnProperty.call(this.original, 'params')) {
+            if (this.original.hasOwnProperty('params')) {
                 Object.assign(this.options, _.pick(this.original.params, apiConfig.options));
             }
 
-            if (Object.prototype.hasOwnProperty.call(this.original, 'options')) {
+            if (this.original.hasOwnProperty('options')) {
                 Object.assign(this.options, _.pick(this.original.options, apiConfig.options));
             }
         }
@@ -68,15 +68,15 @@ class Frame {
                     apiConfig.data = apiConfig.data(this);
                 }
 
-                if (Object.prototype.hasOwnProperty.call(this.original, 'query')) {
+                if (this.original.hasOwnProperty('query')) {
                     Object.assign(this.data, _.pick(this.original.query, apiConfig.data));
                 }
 
-                if (Object.prototype.hasOwnProperty.call(this.original, 'params')) {
+                if (this.original.hasOwnProperty('params')) {
                     Object.assign(this.data, _.pick(this.original.params, apiConfig.data));
                 }
 
-                if (Object.prototype.hasOwnProperty.call(this.original, 'options')) {
+                if (this.original.hasOwnProperty('options')) {
                     Object.assign(this.data, _.pick(this.original.options, apiConfig.data));
                 }
             }

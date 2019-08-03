@@ -1,7 +1,11 @@
 const Promise = require('bluebird');
 const _ = require('lodash');
+const moment = require('moment-timezone');
+const fs = require('fs-extra');
+const path = require('path');
+const config = require('../../config');
 const models = require('../../models');
-const routing = require('../../../frontend/services/routing');
+const urlService = require('../../services/url');
 const common = require('../../lib/common');
 const settingsCache = require('../../services/settings/cache');
 
@@ -147,7 +151,62 @@ module.exports = {
             method: 'edit'
         },
         query(frame) {
-            return routing.settings.setFromFilePath(frame.file.path);
+            const backupRoutesPath = path.join(config.getContentPath('settings'), `routes-${moment().format('YYYY-MM-DD-HH-mm-ss')}.yaml`);
+
+            return fs.copy(`${config.getContentPath('settings')}/routes.yaml`, backupRoutesPath)
+                .then(() => {
+                    return fs.copy(frame.file.path, `${config.getContentPath('settings')}/routes.yaml`);
+                })
+                .then(() => {
+                    urlService.resetGenerators({releaseResourcesOnly: true});
+                })
+                .then(() => {
+                    const siteApp = require('../../web/site/app');
+
+                    const bringBackValidRoutes = () => {
+                        urlService.resetGenerators({releaseResourcesOnly: true});
+
+                        return fs.copy(backupRoutesPath, `${config.getContentPath('settings')}/routes.yaml`)
+                            .then(() => {
+                                return siteApp.reload();
+                            });
+                    };
+
+                    try {
+                        siteApp.reload();
+                    } catch (err) {
+                        return bringBackValidRoutes()
+                            .finally(() => {
+                                throw err;
+                            });
+                    }
+
+                    let tries = 0;
+
+                    function isBlogRunning() {
+                        return Promise.delay(1000)
+                            .then(() => {
+                                if (!urlService.hasFinished()) {
+                                    if (tries > 5) {
+                                        throw new common.errors.InternalServerError({
+                                            message: 'Could not load routes.yaml file.'
+                                        });
+                                    }
+
+                                    tries = tries + 1;
+                                    return isBlogRunning();
+                                }
+                            });
+                    }
+
+                    return isBlogRunning()
+                        .catch((err) => {
+                            return bringBackValidRoutes()
+                                .finally(() => {
+                                    throw err;
+                                });
+                        });
+                });
         }
     },
 
@@ -165,7 +224,22 @@ module.exports = {
             method: 'browse'
         },
         query() {
-            return routing.settings.get();
+            const routesPath = path.join(config.getContentPath('settings'), 'routes.yaml');
+
+            return fs.readFile(routesPath, 'utf-8')
+                .catch((err) => {
+                    if (err.code === 'ENOENT') {
+                        return Promise.resolve([]);
+                    }
+
+                    if (common.errors.utils.isIgnitionError(err)) {
+                        throw err;
+                    }
+
+                    throw new common.errors.NotFoundError({
+                        err: err
+                    });
+                });
         }
     }
 };
