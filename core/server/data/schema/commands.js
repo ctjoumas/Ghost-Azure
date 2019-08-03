@@ -10,10 +10,10 @@ function addTableColumn(tableName, table, columnName) {
         columnSpec = schema[tableName][columnName];
 
     // creation distinguishes between text with fieldtype, string with maxlength and all others
-    if (columnSpec.type === 'text' && Object.prototype.hasOwnProperty.call(columnSpec, 'fieldtype')) {
+    if (columnSpec.type === 'text' && columnSpec.hasOwnProperty('fieldtype')) {
         column = table[columnSpec.type](columnName, columnSpec.fieldtype);
     } else if (columnSpec.type === 'string') {
-        if (Object.prototype.hasOwnProperty.call(columnSpec, 'maxlength')) {
+        if (columnSpec.hasOwnProperty('maxlength')) {
             column = table[columnSpec.type](columnName, columnSpec.maxlength);
         } else {
             column = table[columnSpec.type](columnName, 191);
@@ -22,28 +22,28 @@ function addTableColumn(tableName, table, columnName) {
         column = table[columnSpec.type](columnName);
     }
 
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'nullable') && columnSpec.nullable === true) {
+    if (columnSpec.hasOwnProperty('nullable') && columnSpec.nullable === true) {
         column.nullable();
     } else {
         column.nullable(false);
     }
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'primary') && columnSpec.primary === true) {
+    if (columnSpec.hasOwnProperty('primary') && columnSpec.primary === true) {
         column.primary();
     }
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'unique') && columnSpec.unique) {
+    if (columnSpec.hasOwnProperty('unique') && columnSpec.unique) {
         column.unique();
     }
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'unsigned') && columnSpec.unsigned) {
+    if (columnSpec.hasOwnProperty('unsigned') && columnSpec.unsigned) {
         column.unsigned();
     }
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'references')) {
+    if (columnSpec.hasOwnProperty('references')) {
         // check if table exists?
         column.references(columnSpec.references);
     }
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'defaultTo')) {
+    if (columnSpec.hasOwnProperty('defaultTo')) {
         column.defaultTo(columnSpec.defaultTo);
     }
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'index') && columnSpec.index === true) {
+    if (columnSpec.hasOwnProperty('index') && columnSpec.index === true) {
         column.index();
     }
 }

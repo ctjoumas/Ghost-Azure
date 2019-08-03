@@ -89,16 +89,6 @@ const Integration = ghostBookshelf.Model.extend({
     webhooks: function webhooks() {
         return this.hasMany('Webhook', 'integration_id');
     }
-}, {
-    permittedOptions(methodName) {
-        let options = ghostBookshelf.Model.permittedOptions.call(this, methodName);
-
-        if (methodName === 'findOne') {
-            options = options.concat(['filter']);
-        }
-
-        return options;
-    }
 });
 
 const Integrations = ghostBookshelf.Collection.extend({

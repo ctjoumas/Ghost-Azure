@@ -18,7 +18,7 @@ const notImplemented = function (req, res, next) {
         // @NOTE: experimental
         tags: ['GET', 'PUT', 'DELETE', 'POST'],
         users: ['GET'],
-        themes: ['POST', 'PUT'],
+        themes: ['POST'],
         subscribers: ['GET', 'PUT', 'DELETE', 'POST'],
         config: ['GET'],
         webhooks: ['POST', 'DELETE']

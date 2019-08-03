@@ -1,5 +1,9 @@
+const Promise = require('bluebird');
+const fs = require('fs-extra');
+const debug = require('ghost-ignition').debug('api:themes');
 const common = require('../../lib/common');
-const themeService = require('../../../frontend/services/themes');
+const themeService = require('../../services/themes');
+const settingsCache = require('../../services/settings/cache');
 const models = require('../../models');
 
 module.exports = {
@@ -8,7 +12,7 @@ module.exports = {
     browse: {
         permissions: true,
         query() {
-            return themeService.getJSON();
+            return themeService.toJSON();
         }
     },
 
@@ -29,19 +33,34 @@ module.exports = {
         permissions: true,
         query(frame) {
             let themeName = frame.options.name;
+            let checkedTheme;
+
             const newSettings = [{
                 key: 'active_theme',
                 value: themeName
             }];
 
-            return themeService.activate(themeName)
-                .then((checkedTheme) => {
+            const loadedTheme = themeService.list.get(themeName);
+
+            if (!loadedTheme) {
+                return Promise.reject(new common.errors.ValidationError({
+                    message: common.i18n.t('notices.data.validation.index.themeCannotBeActivated', {themeName: themeName}),
+                    errorDetails: newSettings
+                }));
+            }
+
+            return themeService.validate.checkSafe(loadedTheme)
+                .then((_checkedTheme) => {
+                    checkedTheme = _checkedTheme;
+
                     // @NOTE: we use the model, not the API here, as we don't want to trigger permissions
-                    return models.Settings.edit(newSettings, frame.options)
-                        .then(() => checkedTheme);
+                    return models.Settings.edit(newSettings, frame.options);
                 })
-                .then((checkedTheme) => {
-                    return themeService.getJSON(themeName, checkedTheme);
+                .then(() => {
+                    debug('Activating theme (method B on API "activate")', themeName);
+                    themeService.activate(loadedTheme, checkedTheme);
+
+                    return themeService.toJSON(themeName, checkedTheme);
                 });
         }
     },
@@ -57,17 +76,67 @@ module.exports = {
 
             let zip = {
                 path: frame.file.path,
-                name: frame.file.originalname
+                name: frame.file.originalname,
+                shortName: themeService.storage.getSanitizedFileName(frame.file.originalname.split('.zip')[0])
             };
 
-            return themeService.storage.setFromZip(zip)
-                .then(({theme, themeOverridden}) => {
-                    if (themeOverridden) {
+            let checkedTheme;
+
+            // check if zip name is casper.zip
+            if (zip.name === 'casper.zip') {
+                throw new common.errors.ValidationError({
+                    message: common.i18n.t('errors.api.themes.overrideCasper')
+                });
+            }
+
+            return themeService.validate.checkSafe(zip, true)
+                .then((_checkedTheme) => {
+                    checkedTheme = _checkedTheme;
+
+                    return themeService.storage.exists(zip.shortName);
+                })
+                .then((themeExists) => {
+                    // CASE: delete existing theme
+                    if (themeExists) {
+                        return themeService.storage.delete(zip.shortName);
+                    }
+                })
+                .then(() => {
+                    // CASE: store extracted theme
+                    return themeService.storage.save({
+                        name: zip.shortName,
+                        path: checkedTheme.path
+                    });
+                })
+                .then(() => {
+                    // CASE: loads the theme from the fs & sets the theme on the themeList
+                    return themeService.loadOne(zip.shortName);
+                })
+                .then((loadedTheme) => {
+                    // CASE: if this is the active theme, we are overriding
+                    if (zip.shortName === settingsCache.get('active_theme')) {
+                        debug('Activating theme (method C, on API "override")', zip.shortName);
+                        themeService.activate(loadedTheme, checkedTheme);
+
                         // CASE: clear cache
                         this.headers.cacheInvalidate = true;
                     }
+
                     common.events.emit('theme.uploaded');
-                    return theme;
+
+                    // @TODO: unify the name across gscan and Ghost!
+                    return themeService.toJSON(zip.shortName, checkedTheme);
+                })
+                .finally(() => {
+                    // @TODO: we should probably do this as part of saving the theme
+                    // CASE: remove extracted dir from gscan
+                    // happens in background
+                    if (checkedTheme) {
+                        fs.remove(checkedTheme.path)
+                            .catch((err) => {
+                                common.logging.error(new common.errors.GhostError({err: err}));
+                            });
+                    }
                 });
         }
     },
@@ -88,8 +157,17 @@ module.exports = {
         },
         query(frame) {
             let themeName = frame.options.name;
+            const theme = themeService.list.get(themeName);
 
-            return themeService.storage.getZip(themeName);
+            if (!theme) {
+                return Promise.reject(new common.errors.BadRequestError({
+                    message: common.i18n.t('errors.api.themes.invalidThemeName')
+                }));
+            }
+
+            return themeService.storage.serve({
+                name: themeName
+            });
         }
     },
 
@@ -112,7 +190,30 @@ module.exports = {
         query(frame) {
             let themeName = frame.options.name;
 
-            return themeService.storage.destroy(themeName);
+            if (themeName === 'casper') {
+                throw new common.errors.ValidationError({
+                    message: common.i18n.t('errors.api.themes.destroyCasper')
+                });
+            }
+
+            if (themeName === settingsCache.get('active_theme')) {
+                throw new common.errors.ValidationError({
+                    message: common.i18n.t('errors.api.themes.destroyActive')
+                });
+            }
+
+            const theme = themeService.list.get(themeName);
+
+            if (!theme) {
+                throw new common.errors.NotFoundError({
+                    message: common.i18n.t('errors.api.themes.themeDoesNotExist')
+                });
+            }
+
+            return themeService.storage.delete(themeName)
+                .then(() => {
+                    themeService.list.del(themeName);
+                });
         }
     }
 };

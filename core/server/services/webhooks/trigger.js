@@ -79,7 +79,7 @@ module.exports = (event, model) => {
                                 'Content-Type': 'application/json'
                             },
                             timeout: 2 * 1000,
-                            retry: 5
+                            retries: 5
                         };
 
                         common.logging.info(`Trigger Webhook for  "${webhook.get('event')}" with url "${url}".`);

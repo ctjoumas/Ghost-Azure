@@ -15,7 +15,8 @@ module.exports = function apiRoutes() {
     // alias delete with del
     router.del = router.delete;
 
-    router.use(shared.middlewares.api.cors);
+    // ## CORS pre-flight check
+    router.options('*', shared.middlewares.api.cors);
 
     const http = apiv2.http;
 

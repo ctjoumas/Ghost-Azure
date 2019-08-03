@@ -31,7 +31,7 @@ exports.createAdapter = function (options) {
         }));
     }
 
-    if (Object.prototype.hasOwnProperty.call(cache, activeAdapter)) {
+    if (cache.hasOwnProperty(activeAdapter)) {
         return cache[activeAdapter];
     }
 

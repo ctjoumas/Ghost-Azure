@@ -100,11 +100,7 @@ class PostsImporter extends BaseImporter {
 
                 // CASE: search through imported data.
                 // EDGE CASE: uppercase tag slug was imported and auto modified
-                let importedObject = null;
-
-                if (objectInFile.id) {
-                    importedObject = _.find(this.requiredImportedData[tableName], {originalId: objectInFile.id});
-                }
+                let importedObject = _.find(this.requiredImportedData[tableName], {originalSlug: objectInFile.slug});
 
                 if (importedObject) {
                     this.dataToImport[postIndex][targetProperty][index].id = importedObject.id;

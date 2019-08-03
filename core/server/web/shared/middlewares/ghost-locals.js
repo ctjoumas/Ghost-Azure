@@ -1,5 +1,5 @@
 const ghostVersion = require('../../../lib/ghost-version');
-const themeService = require('../../../../frontend/services/themes');
+const themeService = require('../../../services/themes');
 
 // ### GhostLocals Middleware
 // Expose the standard locals that every request will need to have available

@@ -1,7 +1,7 @@
 module.exports.forPost = (frame, model, attrs) => {
     const _ = require('lodash');
 
-    if (!Object.prototype.hasOwnProperty.call(frame.options, 'columns') ||
+    if (!frame.options.hasOwnProperty('columns') ||
         (frame.options.columns.includes('excerpt') && frame.options.formats && frame.options.formats.includes('plaintext'))) {
         if (_.isEmpty(attrs.custom_excerpt)) {
             const plaintext = model.get('plaintext');

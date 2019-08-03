@@ -4,6 +4,8 @@ const config = require('../config');
 const compress = require('compression');
 const netjet = require('netjet');
 const shared = require('./shared');
+const labs = require('./shared/middlewares/labs');
+const membersService = require('../services/members');
 
 module.exports = function setupParentApp(options = {}) {
     debug('ParentApp setup start');
@@ -45,6 +47,10 @@ module.exports = function setupParentApp(options = {}) {
 
     // ADMIN
     parentApp.use('/ghost', require('./admin')());
+
+    // MEMBERS
+    parentApp.use('/members', labs.members, membersService.gateway);
+    parentApp.use('/members/auth', labs.members, membersService.authPages);
 
     // BLOG
     parentApp.use(require('./site')(options));

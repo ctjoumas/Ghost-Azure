@@ -329,7 +329,7 @@ utils = {
              *
              * @deprecated: `author`, will be removed in Ghost 3.0
              */
-            if (Object.prototype.hasOwnProperty.call(object.posts[0], 'author')) {
+            if (object.posts[0].hasOwnProperty('author')) {
                 object.posts[0].author_id = object.posts[0].author;
                 delete object.posts[0].author;
             }
@@ -352,7 +352,7 @@ utils = {
              *
              * @TODO: remove `id` restriction in Ghost 3.0
              */
-            if (Object.prototype.hasOwnProperty.call(object.posts[0], 'authors')) {
+            if (object.posts[0].hasOwnProperty('authors')) {
                 if (!_.isArray(object.posts[0].authors) ||
                     (object.posts[0].authors.length && _.filter(object.posts[0].authors, 'id').length !== object.posts[0].authors.length)) {
                     return Promise.reject(new common.errors.BadRequestError({
@@ -374,11 +374,11 @@ utils = {
                  */
                 if (object.posts[0].authors && object.posts[0].authors.length) {
                     _.each(object.posts[0].authors, (author, index) => {
-                        if (Object.prototype.hasOwnProperty.call(author, 'roles')) {
+                        if (author.hasOwnProperty('roles')) {
                             delete object.posts[0].authors[index].roles;
                         }
 
-                        if (Object.prototype.hasOwnProperty.call(author, 'permissions')) {
+                        if (author.hasOwnProperty('permissions')) {
                             delete object.posts[0].authors[index].permissions;
                         }
                     });
@@ -391,15 +391,15 @@ utils = {
              *
              * See @TODO on the fn description. This information lives in two places. Not nice.
              */
-            if (Object.prototype.hasOwnProperty.call(object.posts[0], 'tags')) {
+            if (object.posts[0].hasOwnProperty('tags')) {
                 if (_.isArray(object.posts[0].tags) && object.posts[0].tags.length) {
                     _.each(object.posts[0].tags, (tag, index) => {
-                        if (Object.prototype.hasOwnProperty.call(tag, 'parent')) {
+                        if (tag.hasOwnProperty('parent')) {
                             object.posts[0].tags[index].parent_id = tag.parent;
                             delete object.posts[0].tags[index].parent;
                         }
 
-                        if (Object.prototype.hasOwnProperty.call(tag, 'posts')) {
+                        if (tag.hasOwnProperty('posts')) {
                             delete object.posts[0].tags[index].posts;
                         }
                     });
