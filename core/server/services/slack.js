@@ -2,7 +2,7 @@ var common = require('../lib/common'),
     request = require('../lib/request'),
     imageLib = require('../lib/image'),
     urlUtils = require('../lib/url-utils'),
-    urlService = require('../services/url'),
+    urlService = require('../../frontend/services/url'),
     settingsCache = require('./settings/cache'),
     schema = require('../data/schema').checks,
     moment = require('moment'),
@@ -117,7 +117,7 @@ function ping(post) {
             common.logging.error(new common.errors.GhostError({
                 err: err,
                 context: common.i18n.t('errors.services.ping.requestFailed.error', {service: 'slack'}),
-                help: common.i18n.t('errors.services.ping.requestFailed.help', {url: 'https://docs.ghost.org'})
+                help: common.i18n.t('errors.services.ping.requestFailed.help', {url: 'https://ghost.org/docs/'})
             }));
         });
     }
