@@ -1,2 +1,3 @@
 loggingEnabled: true
 enableXFF: true
+nodeProcessCommandLine: "D:\Program Files\nodejs\10.15.2\node.exe"
