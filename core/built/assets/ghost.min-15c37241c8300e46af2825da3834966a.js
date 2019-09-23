@@ -220,8 +220,9 @@ e.default=a}),define("ghost-admin/components/gh-member-avatar",["exports"],funct
 var t=Ember.Component.extend({tagName:"",member:null,initialsClass:"f6 fw4",backgroundStyle:Ember.computed("member.name",function(){let e=this.member.name
 if(e){let t=function(e,t,s){for(var n=0,a=0;a<e.length;a++)n=e.charCodeAt(a)+((n<<5)-n)
 return"hsl("+n%360+", "+t+"%, "+s+"%)"}(e,55,55)
-return Ember.String.htmlSafe("background-color: ".concat(t))}return Ember.String.htmlSafe("")}),initials:Ember.computed("member.name",function(){let e=this.member.name.split(" ")
-return[e[0][0],e[e.length-1][0]].join("").toUpperCase()})})
+return Ember.String.htmlSafe("background-color: ".concat(t))}return Ember.String.htmlSafe("")}),initials:Ember.computed("member.name",function(){let e=this.member.name
+if(e){let t=e.split(" ")
+return[t[0][0],t[t.length-1][0]].join("").toUpperCase()}return""})})
 e.default=t}),define("ghost-admin/components/gh-mobile-nav-bar",["exports"],function(e){Object.defineProperty(e,"__esModule",{value:!0}),e.default=void 0
 var t=Ember.Component.extend({ui:Ember.inject.service(),tagName:"nav",classNames:["gh-mobile-nav-bar"]})
 e.default=t}),define("ghost-admin/components/gh-nav-menu",["exports","ghost-admin/mixins/shortcuts","ember-basic-dropdown/utils/calculate-position","ghost-admin/utils/ctrl-or-cmd"],function(e,t,s,n){Object.defineProperty(e,"__esModule",{value:!0}),e.default=void 0
@@ -943,8 +944,7 @@ if(!t||e.targetName===t.targetName){if(this.set("leaveScreenTransition",e),this.
 this.set("showUnsavedChangesModal",!0)}},leaveScreen(){let e=this.leaveScreenTransition
 if(e)return this.tag.rollbackAttributes(),e.retry()
 this.notifications.showAlert("Sorry, there was an error in the application. Please let the Ghost team know what happened.",{type:"error"})}},_saveTagProperty(e,t){let n=this.tag,a=n.get("isNew"),r=n.get(e)
-if(t&&(t=t.trim()),t!==r){if(n.set(e,t),"name"===e&&!n.get("slug")&&a){let e=(0,s.slugify)(t)
-n.set("slug",e)}n.get("hasValidated").addObject(e)}},save:(0,n.task)(function*(){let e=this.tag,s=e.get("isNew")
+if(t&&(t=t.trim()),t!==r){if(n.set(e,t),"name"===e&&!n.get("slug")&&a){let e=(0,s.slugify)(t);/^#/.test(t)&&(e="hash-"+e),n.set("slug",e)}n.get("hasValidated").addObject(e)}},save:(0,n.task)(function*(){let e=this.tag,s=e.get("isNew")
 try{let a=yield e.save()
 if(this.replaceRoute("tags.tag",a),!s){let e=window.location.hash.split("/")
 e[e.length-1]!==a.get("slug")&&(e[e.length-1]=a.get("slug"),e=e.join("/"),t.default.replaceState({path:e},"",e))}return a}catch(n){n&&this.notifications.showAPIError(n,{key:"tag.save"})}}),_deleteTag(){return this.tag.destroyRecord().then(()=>{this._deleteTagSuccess()},e=>{this._deleteTagFailure(e)})},_deleteTagSuccess(){(this.router.currentRouteName||"").match(/^tags/)&&this.transitionToRoute("tags.index")},_deleteTagFailure(e){this.notifications.showAPIError(e,{key:"tag.delete"})}})
