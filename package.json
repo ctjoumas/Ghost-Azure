@@ -132,8 +132,8 @@
   },
   "optionalDependencies": {
     "@tryghost/html-to-mobiledoc": "0.6.0",
-    "sharp": "0.23.1",
-    "sqlite3": "4.1.0"
+    "sharp": "0.22.1",
+    "sqlite3": "4.0.9"
   },
   "devDependencies": {
     "eslint": "6.1.0",
