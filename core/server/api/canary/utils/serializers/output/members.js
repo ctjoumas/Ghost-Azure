@@ -1,18 +1,22 @@
 const common = require('../../../../../lib/common');
 const debug = require('ghost-ignition').debug('api:canary:utils:serializers:output:members');
+const mapper = require('./utils/mapper');
 
 module.exports = {
     browse(data, apiConfig, frame) {
         debug('browse');
 
-        frame.response = data;
+        frame.response = {
+            members: data.members.map(member => mapper.mapMember(member, frame)),
+            meta: data.meta
+        };
     },
 
     add(data, apiConfig, frame) {
         debug('add');
 
         frame.response = {
-            members: [data]
+            members: [mapper.mapMember(data, frame)]
         };
     },
 
@@ -20,7 +24,7 @@ module.exports = {
         debug('edit');
 
         frame.response = {
-            members: [data]
+            members: [mapper.mapMember(data, frame)]
         };
     },
 
@@ -34,7 +38,7 @@ module.exports = {
         }
 
         frame.response = {
-            members: [data]
+            members: [mapper.mapMember(data, frame)]
         };
     },
 

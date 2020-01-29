@@ -168,8 +168,22 @@ const configureGrunt = function (grunt) {
                     }
                 },
                 stderr: function (chunk) {
-                    hasBuiltClient = true;
-                    grunt.log.error(chunk);
+                    const skipFilter = grunt.option('client') ? false : [
+                        /- building/
+                    ].some(function (regexp) {
+                        return regexp.test(chunk);
+                    });
+
+                    const errorFilter = grunt.option('client') ? false : [
+                        /^>>/
+                    ].some(function (regexp) {
+                        return regexp.test(chunk);
+                    });
+
+                    if (!skipFilter) {
+                        hasBuiltClient = errorFilter ? hasBuiltClient : true;
+                        grunt.log.error(chunk);
+                    }
                 }
             }
         },
@@ -245,17 +259,6 @@ const configureGrunt = function (grunt) {
             pinned: {
                 options: {
                     params: '--init'
-                }
-            }
-        },
-
-        uglify: {
-            prod: {
-                options: {
-                    sourceMap: false
-                },
-                files: {
-                    'core/server/public/ghost-sdk.min.js': 'core/server/public/ghost-sdk.js'
                 }
             }
         },
@@ -526,7 +529,7 @@ const configureGrunt = function (grunt) {
     //
     // It is otherwise the same as running `grunt`, but is only used when running Ghost in the `production` env.
     grunt.registerTask('prod', 'Build JS & templates for production',
-        ['subgrunt:prod', 'uglify:prod', 'cssnano:prod', 'master-warn']);
+        ['subgrunt:prod', 'cssnano:prod', 'master-warn']);
 
     // ### Live reload
     // `grunt dev` - build assets on the fly whilst developing
