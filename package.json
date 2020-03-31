@@ -12,7 +12,6 @@
     "content",
     "markdown"
   ],
-  "cpu" : [ "x64" ],
   "repository": {
     "type": "git",
     "url": "git://github.com/TryGhost/Ghost.git"
