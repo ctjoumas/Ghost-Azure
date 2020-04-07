@@ -22,8 +22,9 @@ function verifySessionHash(salt, hash) {
 }
 
 function getRedirectUrl(query) {
+    const redirect = decodeURIComponent(query.r || '/');
+
     try {
-        const redirect = decodeURIComponent(query.r || '/');
         return url.parse(redirect).pathname;
     } catch (e) {
         return '/';

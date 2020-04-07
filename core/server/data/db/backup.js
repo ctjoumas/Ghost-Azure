@@ -17,21 +17,6 @@ writeExportFile = function writeExportFile(exportResult) {
     return fs.writeFile(filename, JSON.stringify(exportResult.data)).return(filename);
 };
 
-const readBackup = async (filename) => {
-    const parsedFileName = path.parse(filename);
-    const sanitized = `${parsedFileName.name}${parsedFileName.ext}`;
-    const backupPath = path.resolve(urlUtils.urlJoin(config.get('paths').contentPath, 'data', sanitized));
-
-    const exists = await fs.pathExists(backupPath);
-
-    if (exists) {
-        const backup = await fs.readFile(backupPath);
-        return JSON.parse(backup);
-    } else {
-        return null;
-    }
-};
-
 /**
  * ## Backup
  * does an export, and stores this in a local file
@@ -54,7 +39,4 @@ backup = function backup(options) {
         });
 };
 
-module.exports = {
-    backup,
-    readBackup
-};
+module.exports = backup;

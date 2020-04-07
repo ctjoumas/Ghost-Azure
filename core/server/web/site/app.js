@@ -7,19 +7,17 @@ const common = require('../../lib/common');
 
 // App requires
 const config = require('../../config');
+const apps = require('../../services/apps');
 const constants = require('../../lib/constants');
 const storage = require('../../adapters/storage');
 const urlService = require('../../../frontend/services/url');
+const labsService = require('../../services/labs');
 const urlUtils = require('../../lib/url-utils');
 const sitemapHandler = require('../../../frontend/services/sitemap/handler');
-const appService = require('../../../frontend/services/apps');
-const themeService = require('../../../frontend/services/themes');
-const themeMiddleware = themeService.middleware;
+const themeMiddleware = require('../../../frontend/services/themes').middleware;
 const membersService = require('../../services/members');
-const membersMiddleware = membersService.middleware;
 const siteRoutes = require('./routes');
 const shared = require('../shared');
-const sentry = require('../../sentry');
 
 const STATIC_IMAGE_URL_PREFIX = `/${urlUtils.STATIC_IMAGE_URL_PREFIX}`;
 
@@ -77,12 +75,6 @@ module.exports = function setupSiteApp(options = {}) {
     debug('Site setup start');
 
     const siteApp = express();
-    siteApp.use(sentry.requestHandler);
-
-    // Make sure 'req.secure' is valid for proxied requests
-    // (X-Forwarded-Proto header will be checked, if present)
-    // NB: required here because it's not passed down via vhost
-    siteApp.enable('trust proxy');
 
     // ## App - specific code
     // set the view engine
@@ -106,11 +98,27 @@ module.exports = function setupSiteApp(options = {}) {
     // @TODO make sure all of these have a local 404 error handler
     // Favicon
     siteApp.use(shared.middlewares.serveFavicon());
+    // /public/ghost-sdk.js
+    siteApp.use(shared.middlewares.servePublicFile('public/ghost-sdk.js', 'application/javascript', constants.ONE_HOUR_S));
+    siteApp.use(shared.middlewares.servePublicFile('public/ghost-sdk.min.js', 'application/javascript', constants.ONE_YEAR_S));
 
     // /public/members.js
-    siteApp.get('/public/members.js', membersMiddleware.public);
-    // /public/members.min.js
-    siteApp.get('/public/members.min.js', membersMiddleware.publicMinified);
+    siteApp.get('/public/members-theme-bindings.js',
+        shared.middlewares.labs('members'),
+        shared.middlewares.servePublicFile.createPublicFileMiddleware(
+            'public/members-theme-bindings.js',
+            'application/javascript',
+            constants.ONE_HOUR_S
+        )
+    );
+    siteApp.get('/public/members.js',
+        shared.middlewares.labs('members'),
+        shared.middlewares.servePublicFile.createPublicFileMiddleware(
+            'public/members.js',
+            'application/javascript',
+            constants.ONE_HOUR_S
+        )
+    );
 
     // Serve sitemap.xsl file
     siteApp.use(shared.middlewares.servePublicFile('sitemap.xsl', 'text/xsl', constants.ONE_DAY_S));
@@ -120,8 +128,8 @@ module.exports = function setupSiteApp(options = {}) {
     siteApp.use(shared.middlewares.servePublicFile('public/ghost.min.css', 'text/css', constants.ONE_YEAR_S));
 
     // Serve images for default templates
-    siteApp.use(shared.middlewares.servePublicFile('public/404-ghost@2x.png', 'image/png', constants.ONE_HOUR_S));
-    siteApp.use(shared.middlewares.servePublicFile('public/404-ghost.png', 'image/png', constants.ONE_HOUR_S));
+    siteApp.use(shared.middlewares.servePublicFile('public/404-ghost@2x.png', 'png', constants.ONE_HOUR_S));
+    siteApp.use(shared.middlewares.servePublicFile('public/404-ghost.png', 'png', constants.ONE_HOUR_S));
 
     // Serve blog images using the storage adapter
     siteApp.use(STATIC_IMAGE_URL_PREFIX, shared.middlewares.image.handleImageSizes, storage.getStorage().serve());
@@ -133,13 +141,67 @@ module.exports = function setupSiteApp(options = {}) {
     require('../../../frontend/helpers').loadCoreHelpers();
     debug('Helpers done');
 
-    // Members middleware
-    // Initializes members specific routes as well as assigns members specific data to the req/res objects
-    siteApp.get('/members/ssr', membersMiddleware.getIdentityToken);
-    siteApp.delete('/members/ssr', membersMiddleware.deleteSession);
-    siteApp.post('/members/webhooks/stripe', membersMiddleware.stripeWebhooks);
+    // @TODO only loads this stuff if members is enabled
+    // Set req.member & res.locals.member if a cookie is set
+    siteApp.get('/members/ssr', shared.middlewares.labs.members, async function (req, res) {
+        try {
+            const token = await membersService.ssr.getIdentityTokenForMemberFromSession(req, res);
+            res.writeHead(200);
+            res.end(token);
+        } catch (err) {
+            common.logging.warn(err.message);
+            res.writeHead(err.statusCode);
+            res.end(err.message);
+        }
+    });
 
-    siteApp.use(membersMiddleware.createSessionFromToken);
+    siteApp.delete('/members/ssr', shared.middlewares.labs.members, async function (req, res) {
+        try {
+            await membersService.ssr.deleteSession(req, res);
+            res.writeHead(204);
+            res.end();
+        } catch (err) {
+            common.logging.warn(err.message);
+            res.writeHead(err.statusCode);
+            res.end(err.message);
+        }
+    });
+    siteApp.post('/members/webhooks/stripe', (req, res, next) => membersService.api.middleware.handleStripeWebhook(req, res, next));
+    siteApp.use(async function (req, res, next) {
+        if (!labsService.isSet('members')) {
+            req.member = null;
+            return next();
+        }
+        try {
+            const member = await membersService.ssr.getMemberDataFromSession(req, res);
+            Object.assign(req, {member});
+            next();
+        } catch (err) {
+            common.logging.warn(err.message);
+            Object.assign(req, {member: null});
+            next();
+        }
+    });
+    siteApp.use(async function (req, res, next) {
+        if (!labsService.isSet('members')) {
+            return next();
+        }
+        if (!req.url.includes('token=')) {
+            return next();
+        }
+        try {
+            const member = await membersService.ssr.exchangeTokenForSession(req, res);
+            Object.assign(req, {member});
+            next();
+        } catch (err) {
+            common.logging.warn(err.message);
+            return next();
+        }
+    });
+    siteApp.use(function (req, res, next) {
+        res.locals.member = req.member;
+        next();
+    });
 
     // Theme middleware
     // This should happen AFTER any shared assets are served, as it only changes things to do with templates
@@ -156,7 +218,7 @@ module.exports = function setupSiteApp(options = {}) {
     siteApp.use(shared.middlewares.servePublicFile('robots.txt', 'text/plain', constants.ONE_HOUR_S));
 
     // setup middleware for internal apps
-    // @TODO: refactor this to be a proper app middleware hook for internal apps
+    // @TODO: refactor this to be a proper app middleware hook for internal & external apps
     config.get('apps:internal').forEach((appName) => {
         const app = require(path.join(config.get('paths').internalAppPath, appName));
 
@@ -188,6 +250,9 @@ module.exports = function setupSiteApp(options = {}) {
         }
     });
 
+    // Fetch the frontend client into res.locals
+    siteApp.use(shared.middlewares.frontendClient);
+
     debug('General middleware done');
 
     router = siteRoutes(options);
@@ -197,7 +262,6 @@ module.exports = function setupSiteApp(options = {}) {
     siteApp.use(SiteRouter);
 
     // ### Error handlers
-    siteApp.use(sentry.errorHandler);
     siteApp.use(shared.middlewares.errorHandler.pageNotFound);
     siteApp.use(shared.middlewares.errorHandler.handleThemeResponse);
 
@@ -208,11 +272,11 @@ module.exports = function setupSiteApp(options = {}) {
 
 module.exports.reload = () => {
     // https://github.com/expressjs/express/issues/2596
-    router = siteRoutes({start: themeService.getApiVersion()});
+    router = siteRoutes({start: true});
     Object.setPrototypeOf(SiteRouter, router);
 
     // re-initialse apps (register app routers, because we have re-initialised the site routers)
-    appService.init();
+    apps.init();
 
     // connect routers and resources again
     urlService.queue.start({

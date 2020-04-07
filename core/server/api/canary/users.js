@@ -1,7 +1,5 @@
-const path = require('path');
 const Promise = require('bluebird');
 const common = require('../../lib/common');
-const dbBackup = require('../../data/db/backup');
 const models = require('../../models');
 const permissionsService = require('../../services/permissions');
 const ALLOWED_INCLUDES = ['count.posts', 'permissions', 'roles', 'roles.permissions'];
@@ -108,6 +106,7 @@ module.exports = {
     },
 
     destroy: {
+        statusCode: 204,
         headers: {
             cacheInvalidate: true
         },
@@ -122,19 +121,17 @@ module.exports = {
             }
         },
         permissions: true,
-        async query(frame) {
-            const backupPath = await dbBackup.backup();
-            const parsedFileName = path.parse(backupPath);
-            const filename = `${parsedFileName.name}${parsedFileName.ext}`;
-
+        query(frame) {
             return models.Base.transaction((t) => {
                 frame.options.transacting = t;
 
-                return models.Post.destroyByAuthor(frame.options)
-                    .then(() => {
-                        return models.User.destroy(Object.assign({status: 'all'}, frame.options));
-                    })
-                    .then(() => filename);
+                return Promise.all([
+                    models.Accesstoken.destroyByUser(frame.options),
+                    models.Refreshtoken.destroyByUser(frame.options),
+                    models.Post.destroyByAuthor(frame.options)
+                ]).then(() => {
+                    return models.User.destroy(Object.assign({status: 'all'}, frame.options));
+                }).return(null);
             }).catch((err) => {
                 return Promise.reject(new common.errors.NoPermissionError({
                     err: err
@@ -160,7 +157,6 @@ module.exports = {
             }
         },
         query(frame) {
-            frame.options.skipSessionID = frame.original.session.id;
             return models.User.changePassword(frame.data.password[0], frame.options);
         }
     },

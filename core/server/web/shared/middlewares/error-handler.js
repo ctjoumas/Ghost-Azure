@@ -4,7 +4,6 @@ const debug = require('ghost-ignition').debug('error-handler');
 const config = require('../../../config');
 const common = require('../../../lib/common');
 const helpers = require('../../../../frontend/services/routing/helpers');
-const sentry = require('../../../sentry');
 
 const escapeExpression = hbs.Utils.escapeExpression;
 const _private = {};
@@ -164,7 +163,7 @@ _private.ThemeErrorRenderer = (err, req, res, next) => {
     // Format Data
     const data = {
         message: err.message,
-        // @deprecated Remove in Ghost 4.0
+        // @deprecated Remove in Ghost 3.0
         code: err.statusCode,
         statusCode: err.statusCode,
         errorDetails: err.errorDetails || []
@@ -248,8 +247,6 @@ errorHandler.pageNotFound = (req, res, next) => {
 errorHandler.handleJSONResponse = [
     // Make sure the error can be served
     _private.prepareError,
-    // Handle the error in Sentry
-    sentry.errorHandler,
     // Render the error using JSON format
     _private.JSONErrorRenderer
 ];
@@ -257,8 +254,6 @@ errorHandler.handleJSONResponse = [
 errorHandler.handleJSONResponseV2 = [
     // Make sure the error can be served
     _private.prepareError,
-    // Handle the error in Sentry
-    sentry.errorHandler,
     // Render the error using JSON format
     _private.JSONErrorRendererV2
 ];
@@ -266,8 +261,6 @@ errorHandler.handleJSONResponseV2 = [
 errorHandler.handleHTMLResponse = [
     // Make sure the error can be served
     _private.prepareError,
-    // Handle the error in Sentry
-    sentry.errorHandler,
     // Render the error using HTML format
     _private.HTMLErrorRenderer,
     // Fall back to basic if HTML is not explicitly accepted
@@ -277,8 +270,6 @@ errorHandler.handleHTMLResponse = [
 errorHandler.handleThemeResponse = [
     // Make sure the error can be served
     _private.prepareError,
-    // Handle the error in Sentry
-    sentry.errorHandler,
     // Render the error using theme template
     _private.ThemeErrorRenderer,
     // Fall back to basic if HTML is not explicitly accepted

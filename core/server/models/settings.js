@@ -23,16 +23,6 @@ const getMembersKey = doBlock(() => {
     };
 });
 
-const getGhostKey = doBlock(() => {
-    let UNO_KEYPAIRINO;
-    return function getGhostKey(type) {
-        if (!UNO_KEYPAIRINO) {
-            UNO_KEYPAIRINO = keypair({bits: 1024});
-        }
-        return UNO_KEYPAIRINO[type];
-    };
-});
-
 // For neatness, the defaults file is split into categories.
 // It's much easier for us to work with it as a single level
 // instead of iterating those categories every time
@@ -48,9 +38,7 @@ function parseDefaultSettings() {
             theme_session_secret: () => crypto.randomBytes(32).toString('hex'),
             members_public_key: () => getMembersKey('public'),
             members_private_key: () => getMembersKey('private'),
-            members_email_auth_secret: () => crypto.randomBytes(64).toString('hex'),
-            ghost_public_key: () => getGhostKey('public'),
-            ghost_private_key: () => getGhostKey('private')
+            members_email_auth_secret: () => crypto.randomBytes(64).toString('hex')
         };
 
     _.each(defaultSettingsInCategories, function each(settings, categoryName) {
@@ -251,7 +239,7 @@ Settings = ghostBookshelf.Model.extend({
             });
     },
 
-    permissible: function permissible(modelId, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasApiKeyPermission) {
+    permissible: function permissible(modelId, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasAppPermission, hasApiKeyPermission) {
         let isEdit = (action === 'edit');
         let isOwner;
 
@@ -271,7 +259,7 @@ Settings = ghostBookshelf.Model.extend({
             hasUserPermission = isOwner;
         }
 
-        if (hasUserPermission && hasApiKeyPermission) {
+        if (hasUserPermission && hasApiKeyPermission && hasAppPermission) {
             return Promise.resolve();
         }
 

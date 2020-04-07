@@ -23,9 +23,10 @@ common.events.on('settings.edited', function updateSettingFromModel(settingModel
 });
 
 const membersService = {
-    contentGating: require('./content-gating'),
-
-    config: require('./config'),
+    isPaymentConfigured() {
+        const settings = settingsCache.get('members_subscription_settings');
+        return !!settings && settings.isPaid && settings.paymentProcessors.length !== 0;
+    },
 
     get api() {
         if (!membersApi) {
@@ -48,4 +49,3 @@ const membersService = {
 };
 
 module.exports = membersService;
-module.exports.middleware = require('./middleware');

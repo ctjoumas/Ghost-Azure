@@ -1,17 +1,12 @@
 const path = require('path');
-const imageTransform = require('@tryghost/image-transform');
+const image = require('../../../../lib/image');
 const storage = require('../../../../adapters/storage');
 const activeTheme = require('../../../../../frontend/services/themes/active');
 
 const SIZE_PATH_REGEX = /^\/size\/([^/]+)\//;
-const TRAILING_SLASH_REGEX = /\/+$/;
 
 module.exports = function (req, res, next) {
     if (!SIZE_PATH_REGEX.test(req.url)) {
-        return next();
-    }
-
-    if (TRAILING_SLASH_REGEX.test(req.url)) {
         return next();
     }
 
@@ -21,15 +16,9 @@ module.exports = function (req, res, next) {
         return res.redirect(url);
     };
 
+    // CASE: image manipulator is uncapable of transforming file (e.g. .gif)
     const requestUrlFileExtension = path.parse(req.url).ext;
-
-    // CASE: no file extension was given
-    if (requestUrlFileExtension === '') {
-        return next();
-    }
-
-    // CASE: image transform is not capable of transforming file (e.g. .gif)
-    if (!imageTransform.canTransformFileExtension(requestUrlFileExtension)) {
+    if (!image.manipulator.canTransformFileExtension(requestUrlFileExtension)) {
         return redirectToOriginal();
     }
 
@@ -86,7 +75,7 @@ module.exports = function (req, res, next) {
                 return storageInstance.read({path});
             })
             .then((originalImageBuffer) => {
-                return imageTransform.resizeFromBuffer(originalImageBuffer, imageDimensionConfig);
+                return image.manipulator.resizeImage(originalImageBuffer, imageDimensionConfig);
             })
             .then((resizedImageBuffer) => {
                 return storageInstance.saveRaw(resizedImageBuffer, req.url);

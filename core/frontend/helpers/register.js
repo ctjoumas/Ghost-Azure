@@ -1,5 +1,7 @@
-const Promise = require('bluebird');
-const {config, hbs, errors, logging} = require('./proxy');
+var hbs = require('../services/themes/engine'),
+    Promise = require('bluebird'),
+    config = require('../../server/config'),
+    proxy = require('./proxy');
 
 // Register an async handlebars helper for a given handlebars instance
 function asyncHelperWrapper(hbs, name, fn) {
@@ -14,7 +16,7 @@ function asyncHelperWrapper(hbs, name, fn) {
         Promise.resolve(fn.call(this, context, options)).then(function asyncHelperSuccess(result) {
             cb(result);
         }).catch(function asyncHelperError(err) {
-            var wrappedErr = err instanceof errors.GhostError ? err : new errors.IncorrectUsageError({
+            var wrappedErr = err instanceof proxy.errors.GhostError ? err : new proxy.errors.IncorrectUsageError({
                     err: err,
                     context: 'registerAsyncThemeHelper: ' + name,
                     errorDetails: {
@@ -23,7 +25,7 @@ function asyncHelperWrapper(hbs, name, fn) {
                 }),
                 result = config.get('env') === 'development' ? wrappedErr : '';
 
-            logging.error(wrappedErr);
+            proxy.logging.error(wrappedErr);
 
             cb(new hbs.SafeString(result));
         });

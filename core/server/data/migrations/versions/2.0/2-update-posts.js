@@ -1,7 +1,8 @@
 const _ = require('lodash'),
     Promise = require('bluebird'),
     common = require('../../../../lib/common'),
-    renderers = require('../../../../lib/mobiledoc/renderers'),
+    models = require('../../../../models'),
+    converters = require('../../../../lib/mobiledoc/converters'),
     message1 = 'Updating posts: apply new editor format and set comment_id field.',
     message2 = 'Updated posts: apply new editor format and set comment_id field.',
     message3 = 'Rollback: Updating posts: use old editor format',
@@ -37,42 +38,38 @@ module.exports.up = (options) => {
 
     common.logging.info(message1);
 
-    // @NOTE: raw knex query, because of https://github.com/TryGhost/Ghost/issues/9983
-    return localOptions
-        .transacting('posts')
-        .select(postAllColumns)
-        .then((posts) => {
-            return Promise.map(posts, function (post) {
+    return models.Post.findAll(_.merge({columns: postAllColumns}, localOptions))
+        .then(function (posts) {
+            return Promise.map(posts.models, function (post) {
                 let mobiledoc;
                 let html;
 
                 try {
-                    mobiledoc = JSON.parse(post.mobiledoc || null);
+                    mobiledoc = JSON.parse(post.get('mobiledoc') || null);
 
                     if (!mobiledoc) {
-                        mobiledoc = renderers.mobiledocHtmlRenderer.blankStructure();
+                        mobiledoc = converters.mobiledocConverter.blankStructure();
                     }
                 } catch (err) {
                     common.logging.warn(`Invalid mobiledoc structure for ${post.id}. Falling back to blank structure.`);
-                    mobiledoc = renderers.mobiledocHtmlRenderer.blankStructure();
+                    mobiledoc = converters.mobiledocConverter.blankStructure();
                 }
 
                 // CASE: convert all old editor posts to the new editor format
                 // CASE: if mobiledoc field is null, we auto set a blank structure in the model layer
                 // CASE: if html field is null, we auto generate the html in the model layer
-                if (mobiledoc && post.html && post.html.match(/^<div class="kg-card-markdown">/)) {
-                    html = renderers.mobiledocHtmlRenderer.render(mobiledoc);
+                if (mobiledoc && post.get('html') && post.get('html').match(/^<div class="kg-card-markdown">/)) {
+                    html = converters.mobiledocConverter.render(mobiledoc);
                 }
-                return localOptions
-                    .transacting('posts')
-                    .where('id', '=', post.id)
-                    .update({
-                        comment_id: post.comment_id || post.id,
-                        html: html || post.html,
-                        mobiledoc: JSON.stringify(mobiledoc)
-                    });
+
+                return models.Post.edit({
+                    comment_id: post.get('comment_id') || post.id,
+                    html: html || post.get('html'),
+                    mobiledoc: JSON.stringify(mobiledoc)
+                }, _.merge({id: post.id}, localOptions));
             }, {concurrency: 100});
-        }).then(() => {
+        })
+        .then(() => {
             common.logging.info(message2);
         });
 };
@@ -86,30 +83,26 @@ module.exports.down = (options) => {
     }, options);
 
     common.logging.info(message3);
-    return localOptions
-        .transacting('posts')
-        .select(postAllColumns)
-        .then((posts) => {
-            return Promise.map(posts, function (post) {
+
+    return models.Post.findAll(_.merge({columns: postAllColumns}, localOptions))
+        .then(function (posts) {
+            return Promise.map(posts.models, function (post) {
                 let version = 1;
                 let html;
-                let mobiledoc = JSON.parse(post.mobiledoc || null);
+                let mobiledoc = JSON.parse(post.get('mobiledoc') || null);
 
                 if (!mobiledocIsCompatibleWithV1(mobiledoc)) {
                     version = 2;
                 }
 
                 // CASE: revert: all new editor posts to the old editor format
-                if (mobiledoc && post.html) {
-                    html = renderers.mobiledocHtmlRenderer.render(mobiledoc, version);
+                if (mobiledoc && post.get('html')) {
+                    html = converters.mobiledocConverter.render(mobiledoc, version);
                 }
 
-                return localOptions
-                    .transacting('posts')
-                    .where('id', '=', post.id)
-                    .update({
-                        html: html || post.html
-                    });
+                return models.Post.edit({
+                    html: html || post.get('html')
+                }, _.merge({id: post.id}, localOptions));
             }, {concurrency: 100});
         })
         .then(() => {
