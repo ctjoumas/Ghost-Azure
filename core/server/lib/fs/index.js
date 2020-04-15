@@ -3,7 +3,7 @@ module.exports = {
         return require('./read-csv');
     },
 
-    get zipFolder() {
-        return require('./zip-folder');
+    get formatCSV() {
+        return require('./format-csv');
     }
 };

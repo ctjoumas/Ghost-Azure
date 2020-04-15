@@ -3,8 +3,9 @@
 // several basic behaviours such as UUIDs, as well as a set of Data methods for accessing information from the database.
 //
 // The models are internal to Ghost, only the API and some internal functions such as migration and import/export
-// accesses the models directly. All other parts of Ghost, including the blog frontend, admin UI, and apps are only
-// allowed to access data via the API.
+// accesses the models directly.
+
+// All other parts of Ghost, including the frontend & admin UI are only allowed to access data via the API.
 const _ = require('lodash'),
     bookshelf = require('bookshelf'),
     moment = require('moment'),
@@ -585,6 +586,15 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         const options = ghostBookshelf.Model.filterOptions(unfilteredOptions, 'toJSON');
         options.omitPivot = true;
 
+        /**
+         * removes null relations coming from `hasOne` - https://bookshelfjs.org/api.html#Model-instance-hasOne
+         * Based on https://github.com/bookshelf/bookshelf/issues/72#issuecomment-25164617
+         */
+        _.each(this.relations, (value, key) => {
+            if (_.isEmpty(value)) {
+                delete this.relations[key];
+            }
+        });
         // CASE: get JSON of previous attrs
         if (options.previous) {
             const clonedModel = _.cloneDeep(this);
@@ -673,11 +683,11 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         case 'edit':
             return baseOptions.concat(extraOptions, ['id', 'require']);
         case 'findOne':
-            return baseOptions.concat(extraOptions, ['columns', 'require']);
+            return baseOptions.concat(extraOptions, ['columns', 'require', 'mongoTransformer']);
         case 'findAll':
-            return baseOptions.concat(extraOptions, ['filter', 'columns']);
+            return baseOptions.concat(extraOptions, ['filter', 'columns', 'mongoTransformer']);
         case 'findPage':
-            return baseOptions.concat(extraOptions, ['filter', 'order', 'page', 'limit', 'columns']);
+            return baseOptions.concat(extraOptions, ['filter', 'order', 'page', 'limit', 'columns', 'mongoTransformer']);
         default:
             return baseOptions.concat(extraOptions);
         }
@@ -742,7 +752,13 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             }
 
             if (this.prototype.relationships && this.prototype.relationships.indexOf(property) !== -1) {
-                _.each(data[property], (relation, indexInArr) => {
+                let relations = data[property];
+
+                // CASE: 1:1 relation will have single data point
+                if (!_.isArray(data[property])) {
+                    relations = [data[property]];
+                }
+                _.each(relations, (relation, indexInArr) => {
                     _.each(relation, (value, relationProperty) => {
                         if (value !== null
                             && Object.prototype.hasOwnProperty.call(schema.tables[this.prototype.relationshipBelongsTo[property]], relationProperty)
@@ -898,6 +914,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                 data: data,
                 meta: {pagination: response.pagination}
             };
+        }).catch((err) => {
+            throw err;
         });
     },
 
@@ -1097,8 +1115,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         }
 
         // Some keywords cannot be changed
-        const slugList = _.union(config.get('slugs').reserved, urlUtils.getProtectedSlugs());
-        slug = _.includes(slugList, slug) ? slug + '-' + baseName : slug;
+        slug = _.includes(urlUtils.getProtectedSlugs(), slug) ? slug + '-' + baseName : slug;
 
         // if slug is empty after trimming use the model name
         if (!slug) {

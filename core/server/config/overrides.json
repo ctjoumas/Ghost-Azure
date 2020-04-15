@@ -8,33 +8,23 @@
         "defaultViews": "core/server/views/",
         "defaultSettings": "core/frontend/services/settings/",
         "internalAppPath": "core/frontend/apps/",
-        "internalStoragePath": "core/server/adapters/storage/",
-        "internalSchedulingPath": "core/server/adapters/scheduling/",
+        "internalAdaptersPath": "core/server/adapters/",
         "migrationPath": "core/server/data/migrations",
         "publicFilePath": "core/server/public"
     },
     "apps": {
         "internal": [
             "private-blogging",
-            "subscribers",
             "amp"
         ]
     },
     "slugs": {
-        "reserved": ["admin", "app", "apps", "categories",
-            "category", "dashboard", "feed", "ghost-admin", "login", "logout",
-            "page", "pages", "post", "posts", "public", "register", "setup",
-            "signin", "signout", "signup", "user", "users", "wp-admin", "wp-login"],
         "protected": ["ghost", "rss", "amp"]
     },
     "uploads": {
-        "subscribers": {
-            "extensions": [".csv"],
-            "contentTypes": ["text/csv", "application/csv", "application/octet-stream"]
-        },
         "members": {
             "extensions": [".csv"],
-            "contentTypes": ["text/csv", "application/csv", "application/octet-stream"]
+            "contentTypes": ["text/csv", "application/csv", "application/octet-stream", "application/vnd.ms-excel"]
         },
         "images": {
             "extensions": [".jpg", ".jpeg", ".gif", ".png", ".svg", ".svgz", ".ico"],
@@ -71,20 +61,20 @@
     },
     "api": {
         "versions": {
-            "all": ["v0.1", "v2", "canary"],
+            "all": ["v2", "v3", "canary"],
             "canary": {
                 "admin": "canary/admin",
                 "content": "canary/content",
                 "members": "canary/members"
             },
+            "v3": {
+                "admin": "v3/admin",
+                "content": "v3/content",
+                "members": "v3/members"
+            },
             "v2": {
                 "admin": "v2/admin",
-                "content": "v2/content",
-                "members": "v2/members"
-            },
-            "v0.1": {
-                "admin": "v0.1",
-                "content": "v0.1"
+                "content": "v2/content"
             }
         }
     }

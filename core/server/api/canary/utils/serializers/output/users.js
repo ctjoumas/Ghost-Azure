@@ -10,8 +10,6 @@ module.exports = {
             users: models.data.map(model => mapper.mapUser(model, frame)),
             meta: models.meta
         };
-
-        debug(frame.response);
     },
 
     read(model, apiConfig, frame) {
@@ -20,13 +18,21 @@ module.exports = {
         frame.response = {
             users: [mapper.mapUser(model, frame)]
         };
-
-        debug(frame.response);
     },
 
     edit() {
         debug('edit');
         this.read(...arguments);
+    },
+
+    destroy(filename, apiConfig, frame) {
+        debug('destroy');
+
+        frame.response = {
+            meta: {
+                filename: filename
+            }
+        };
     },
 
     changePassword(models, apiConfig, frame) {
@@ -43,7 +49,5 @@ module.exports = {
         frame.response = {
             users: models.map(model => model.toJSON(frame.options))
         };
-
-        debug(frame.response);
     }
 };

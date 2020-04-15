@@ -4,7 +4,6 @@ const Promise = require('bluebird');
 const request = require('../../lib/request');
 const cheerio = require('cheerio');
 const _ = require('lodash');
-const {URL} = require('url');
 
 const findUrlWithProvider = (url) => {
     let provider;

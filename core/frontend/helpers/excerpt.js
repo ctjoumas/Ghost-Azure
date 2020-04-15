@@ -5,27 +5,23 @@
 //
 // Defaults to words="50"
 
-var proxy = require('./proxy'),
-    _ = require('lodash'),
-    SafeString = proxy.SafeString,
-    getMetaDataExcerpt = proxy.metaData.getMetaDataExcerpt;
+const {SafeString, metaData} = require('../services/proxy');
+const _ = require('lodash');
+const getMetaDataExcerpt = metaData.getMetaDataExcerpt;
 
-/**
- * @NOTE:
- *
- * Content API v2 returns a calculated `post.excerpt` field.
- * See https://github.com/TryGhost/Ghost/issues/10062.
- * We have not touched this helper yet, we will revisit later.
- *
- * @TODO: remove or change if we drop v0.1
- */
 module.exports = function excerpt(options) {
-    var truncateOptions = (options || {}).hash || {},
-        excerptText = this.custom_excerpt
-            ? String(this.custom_excerpt)
-            : this.html
-                ? String(this.html)
-                : '';
+    let truncateOptions = (options || {}).hash || {};
+    let excerptText;
+
+    if (this.custom_excerpt) {
+        excerptText = String(this.custom_excerpt);
+    } else if (this.html) {
+        excerptText = String(this.html);
+    } else if (this.excerpt) {
+        excerptText = String(this.excerpt);
+    } else {
+        excerptText = '';
+    }
 
     truncateOptions = _.pick(truncateOptions, ['words', 'characters']);
     _.keys(truncateOptions).map(function (key) {

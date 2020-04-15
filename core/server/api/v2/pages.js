@@ -196,11 +196,11 @@ module.exports = {
             frame.options.require = true;
 
             return models.Post.destroy(frame.options)
-                .return(null)
+                .then(() => null)
                 .catch(models.Post.NotFoundError, () => {
-                    throw new common.errors.NotFoundError({
+                    return Promise.reject(new common.errors.NotFoundError({
                         message: common.i18n.t('errors.api.pages.pageNotFound')
-                    });
+                    }));
                 });
         }
     }

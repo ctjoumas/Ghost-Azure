@@ -1,10 +1,9 @@
 var fs = require('fs-extra'),
     os = require('os'),
     path = require('path'),
-    Promise = require('bluebird'),
     config = require('../../../server/config'),
     security = require('../../../server/lib/security'),
-    fsLib = require('../../../server/lib/fs'),
+    {compress} = require('@tryghost/zip'),
     LocalFileStorage = require('../../../server/adapters/storage/LocalFileStorage');
 
 /**
@@ -35,13 +34,13 @@ class ThemeStorage extends LocalFileStorage {
 
             fs.ensureDir(zipBasePath)
                 .then(function () {
-                    return Promise.promisify(fsLib.zipFolder)(themePath, zipPath);
+                    return compress(themePath, zipPath);
                 })
-                .then(function (length) {
+                .then(function (result) {
                     res.set({
                         'Content-disposition': 'attachment; filename={themeName}.zip'.replace('{themeName}', themeName),
                         'Content-Type': 'application/zip',
-                        'Content-Length': length
+                        'Content-Length': result.size
                     });
 
                     stream = fs.createReadStream(zipPath);

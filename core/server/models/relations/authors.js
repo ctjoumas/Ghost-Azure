@@ -107,7 +107,7 @@ module.exports.extendModel = function extendModel(Post, Posts, ghostBookshelf) {
             const ops = [];
 
             /**
-             * @deprecated: `author`, will be removed in Ghost 3.0, drop v0.1
+             * @deprecated: `author`, is unused in Ghost 3.0, should be removed before Ghost 4.0
              */
             model.unset('author');
 
@@ -314,7 +314,7 @@ module.exports.extendModel = function extendModel(Post, Posts, ghostBookshelf) {
                         return (options.transacting || ghostBookshelf.knex)('posts_authors')
                             .where('author_id', authorId)
                             .del()
-                            .return(response);
+                            .then(() => response);
                     })
                     .catch((err) => {
                         throw new common.errors.GhostError({err: err});
@@ -331,7 +331,7 @@ module.exports.extendModel = function extendModel(Post, Posts, ghostBookshelf) {
             return destroyPost();
         },
 
-        permissible: function permissible(postModelOrId, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasAppPermission, hasApiKeyPermission) {
+        permissible: function permissible(postModelOrId, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasApiKeyPermission) {
             var self = this,
                 postModel = postModelOrId,
                 origArgs, isContributor, isAuthor, isEdit, isAdd, isDestroy;
@@ -420,7 +420,7 @@ module.exports.extendModel = function extendModel(Post, Posts, ghostBookshelf) {
                 hasUserPermission = hasUserPermission || isPrimaryAuthor();
             }
 
-            if (hasUserPermission && hasApiKeyPermission && hasAppPermission) {
+            if (hasUserPermission && hasApiKeyPermission) {
                 return Post.permissible.call(
                     this,
                     postModelOrId,
@@ -428,7 +428,6 @@ module.exports.extendModel = function extendModel(Post, Posts, ghostBookshelf) {
                     unsafeAttrs,
                     loadedPermissions,
                     hasUserPermission,
-                    hasAppPermission,
                     hasApiKeyPermission
                 ).then(({excludedAttrs}) => {
                     // @TODO: we need a concept for making a diff between incoming authors and existing authors

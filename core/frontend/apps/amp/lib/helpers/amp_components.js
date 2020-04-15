@@ -8,7 +8,7 @@
 // By default supported AMP HTML tags (no additional script tag necessary):
 // amp-img, amp-ad, amp-embed, amp-video and amp-pixel.
 // (less) dirty requires
-const proxy = require('../../../../helpers/proxy'),
+const proxy = require('../../../../services/proxy'),
     SafeString = proxy.SafeString;
 
 function ampComponents() {
@@ -23,7 +23,14 @@ function ampComponents() {
         components.push('<script async custom-element="amp-anim" src="https://cdn.ampproject.org/v0/amp-anim-0.1.js"></script>');
     }
 
-    if (html.indexOf('<iframe') !== -1) {
+    let iframeCount = (html.match(/(<iframe)(.*?)(<\/iframe>)/gi) || []).length,
+        youtubeCount = (html.match(/(<iframe)(.*?)(youtu.be\/|youtube(-nocookie)?.com\/(v\/|.*u\/\w\/|embed\/|.*v=))(.*?)(<\/iframe>)/gi) || []).length;
+
+    if (youtubeCount) {
+        components.push('<script async custom-element="amp-youtube" src="https://cdn.ampproject.org/v0/amp-youtube-0.1.js"></script>');
+    }
+
+    if (iframeCount > youtubeCount) {
         components.push('<script async custom-element="amp-iframe" src="https://cdn.ampproject.org/v0/amp-iframe-0.1.js"></script>');
     }
 

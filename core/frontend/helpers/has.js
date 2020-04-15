@@ -4,13 +4,14 @@
 //
 // Checks if a post has a particular property
 
-var proxy = require('./proxy'),
-    _ = require('lodash'),
-    logging = proxy.logging,
-    i18n = proxy.i18n,
-    validAttrs = ['tag', 'author', 'slug', 'id', 'number', 'index', 'any', 'all'];
+const {logging, i18n} = require('../services/proxy');
+const _ = require('lodash');
+const validAttrs = ['tag', 'author', 'slug','visibility', 'id', 'number', 'index', 'any', 'all'];
 
 function handleCount(ctxAttr, data) {
+    if (!data || !_.isFinite(data.length)) {
+        return false;
+    }
     let count;
 
     if (ctxAttr.match(/count:\d+/)) {
@@ -119,7 +120,7 @@ module.exports = function has(options) {
 
     var self = this,
         attrs = _.pick(options.hash, validAttrs),
-        data = _.pick(options.data, ['blog', 'config', 'labs']),
+        data = _.pick(options.data, ['site', 'config', 'labs']),
         checks = {
             tag: function () {
                 return handleTag(self, attrs);
@@ -132,6 +133,9 @@ module.exports = function has(options) {
             },
             index: function () {
                 return attrs.index && evaluateIntegerMatch(attrs.index, options.data.index) || false;
+            },
+            visibility: function () {
+                return attrs.visibility && evaluateStringMatch(attrs.visibility, self.visibility, true) || false;
             },
             slug: function () {
                 return attrs.slug && evaluateStringMatch(attrs.slug, self.slug, true) || false;

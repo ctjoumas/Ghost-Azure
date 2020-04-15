@@ -12,8 +12,9 @@
 //  req.baseUrl = /blog
 //  req.path =  /ghost/signin/
 
+const errors = require('@tryghost/errors');
 const urlUtils = require('../../../lib/url-utils');
-const common = require('../../../lib/common');
+const {i18n} = require('../../../lib/common');
 const localUtils = require('../utils');
 
 const uncapitalise = (req, res, next) => {
@@ -28,7 +29,7 @@ const uncapitalise = (req, res, next) => {
         pathToTest = isSignupOrReset[1];
     }
 
-    // Do not lowercase anything after e.g. /api/v0.1/ to protect :key/:slug
+    // Do not lowercase anything after e.g. /api/v{X}/ to protect :key/:slug
     if (isAPI) {
         pathToTest = isAPI[1];
     }
@@ -36,8 +37,8 @@ const uncapitalise = (req, res, next) => {
     try {
         decodedURI = decodeURIComponent(pathToTest);
     } catch (err) {
-        return next(new common.errors.NotFoundError({
-            message: common.i18n.t('errors.errors.pageNotFound'),
+        return next(new errors.NotFoundError({
+            message: i18n.t('errors.errors.pageNotFound'),
             err: err
         }));
     }
