@@ -928,7 +928,7 @@ if(t.curOp.focus=D(),!ge(t,e)){a&&l<11&&27==e.keyCode&&(e.returnValue=!1)
 var r=e.keyCode
 t.display.shift=16==r||e.shiftKey
 var n=aa(t,e)
-d&&(la=n?r:null,!n&&88==r&&!ze&&(y?e.metaKey:e.ctrlKey)&&t.replaceSelection("",null,"cut")),18!=r||/\bCodeMirror-crosshair\b/.test(t.display.lineDiv.className)||function(e){var t=e.display.lineDiv
+d&&(la=n?r:null,n||88!=r||ze||!(y?e.metaKey:e.ctrlKey)||t.replaceSelection("",null,"cut")),18!=r||/\bCodeMirror-crosshair\b/.test(t.display.lineDiv.className)||function(e){var t=e.display.lineDiv
 function r(e){18!=e.keyCode&&e.altKey||(T(t,"CodeMirror-crosshair"),he(document,"keyup",r),he(document,"mouseover",r))}z(t,"CodeMirror-crosshair"),de(document,"keyup",r),de(document,"mouseover",r)}(t)}}function ua(e){16==e.keyCode&&(this.doc.sel.shift=!1),ge(this,e)}function ca(e){var t=this
 if(!(xr(t.display,e)||ge(t,e)||e.ctrlKey&&!e.altKey||y&&e.metaKey)){var r=e.keyCode,n=e.charCode
 if(d&&r==la)return la=null,void be(e)

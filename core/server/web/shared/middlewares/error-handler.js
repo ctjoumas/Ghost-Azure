@@ -5,7 +5,7 @@ const errors = require('@tryghost/errors');
 const config = require('../../../config');
 const {i18n} = require('../../../lib/common');
 const helpers = require('../../../../frontend/services/routing/helpers');
-const sentry = require('../../../sentry');
+const sentry = require('../../../../shared/sentry');
 
 const escapeExpression = hbs.Utils.escapeExpression;
 const _private = {};
@@ -41,12 +41,12 @@ _private.prepareError = (err, req, res, next) => {
             err = new errors.NotFoundError({
                 err: err
             });
-        } else if (err instanceof TypeError && err.stack.match(/node_modules\/handlebars\//)) {
+        } else if (err.stack.match(/node_modules\/handlebars\//)) {
             // Temporary handling of theme errors from handlebars
             // @TODO remove this when #10496 is solved properly
             err = new errors.IncorrectUsageError({
                 err: err,
-                message: '{{#if}} or {{#unless}} helper is malformed',
+                message: err.message,
                 statusCode: err.statusCode
             });
         } else {

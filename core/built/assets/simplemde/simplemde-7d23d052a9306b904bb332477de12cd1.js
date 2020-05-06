@@ -1202,7 +1202,7 @@ if(t.curOp.focus=F(),!me(t,e)){a&&l<11&&27==e.keyCode&&(e.returnValue=!1)
 var n=e.keyCode
 t.display.shift=16==n||e.shiftKey
 var r=aa(t,e)
-f&&(la=r?n:null,!r&&88==n&&!Oe&&(y?e.metaKey:e.ctrlKey)&&t.replaceSelection("",null,"cut")),18!=n||/\bCodeMirror-crosshair\b/.test(t.display.lineDiv.className)||function(e){var t=e.display.lineDiv
+f&&(la=r?n:null,r||88!=n||Oe||!(y?e.metaKey:e.ctrlKey)||t.replaceSelection("",null,"cut")),18!=n||/\bCodeMirror-crosshair\b/.test(t.display.lineDiv.className)||function(e){var t=e.display.lineDiv
 function n(e){18!=e.keyCode&&e.altKey||(T(t,"CodeMirror-crosshair"),he(document,"keyup",n),he(document,"mouseover",n))}O(t,"CodeMirror-crosshair"),fe(document,"keyup",n),fe(document,"mouseover",n)}(t)}}function ua(e){16==e.keyCode&&(this.doc.sel.shift=!1),me(this,e)}function ca(e){var t=this
 if(!(Cn(t.display,e)||me(t,e)||e.ctrlKey&&!e.altKey||y&&e.metaKey)){var n=e.keyCode,r=e.charCode
 if(f&&n==la)return la=null,void xe(e)
@@ -1721,7 +1721,7 @@ if(this.checkExact(r))return!0}return!1},checkExact:function(e){if(!this.loaded)
 var t,n,r=this.dictionaryTable[e]
 if(void 0===r){if("COMPOUNDMIN"in this.flags&&e.length>=this.flags.COMPOUNDMIN)for(t=0,n=this.compoundRules.length;t<n;t++)if(e.match(this.compoundRules[t]))return!0}else{if(null===r)return!0
 if("object"==typeof r)for(t=0,n=r.length;t<n;t++)if(!this.hasFlag(e,"ONLYINCOMPOUND",r[t]))return!0}return!1},hasFlag:function(e,t,n){if(!this.loaded)throw"Dictionary not loaded."
-return!!(t in this.flags&&(void 0===n&&(n=Array.prototype.concat.apply([],this.dictionaryTable[e])),n&&-1!==n.indexOf(this.flags[t])))},alphabet:"",suggest:function(e,t){if(!this.loaded)throw"Dictionary not loaded."
+return!(!(t in this.flags)||(void 0===n&&(n=Array.prototype.concat.apply([],this.dictionaryTable[e])),!n||-1===n.indexOf(this.flags[t])))},alphabet:"",suggest:function(e,t){if(!this.loaded)throw"Dictionary not loaded."
 if(t=t||5,this.memoized.hasOwnProperty(e)){var n=this.memoized[e].limit
 if(t<=n||this.memoized[e].suggestions.length<n)return this.memoized[e].suggestions.slice(0,t)}if(this.check(e))return[]
 for(var r=0,i=this.replacementTable.length;r<i;r++){var o=this.replacementTable[r]
