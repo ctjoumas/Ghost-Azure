@@ -1,17 +1,17 @@
-const schema = require('../schema').tables;
-const _ = require('lodash');
-const validator = require('validator');
-const moment = require('moment-timezone');
-const assert = require('assert');
-const Promise = require('bluebird');
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
-const settingsCache = require('../../services/settings/cache');
-const urlUtils = require('../../../shared/url-utils');
-let validatePassword;
-let validateSchema;
-let validateSettings;
-let validate;
+var schema = require('../schema').tables,
+    _ = require('lodash'),
+    validator = require('validator'),
+    moment = require('moment-timezone'),
+    assert = require('assert'),
+    Promise = require('bluebird'),
+    common = require('../../lib/common'),
+    settingsCache = require('../../services/settings/cache'),
+    urlUtils = require('../../lib/url-utils'),
+
+    validatePassword,
+    validateSchema,
+    validateSettings,
+    validate;
 
 function assertString(input) {
     assert(typeof input === 'string', 'Validator js validates strings only');
@@ -24,9 +24,9 @@ function assertString(input) {
  * @return {Boolean}
  */
 function characterOccurance(stringToTest) {
-    const chars = {};
-    let allowedOccurancy;
-    let valid = true;
+    var chars = {},
+        allowedOccurancy,
+        valid = true;
 
     stringToTest = _.toString(stringToTest);
     allowedOccurancy = stringToTest.length / 2;
@@ -55,7 +55,7 @@ function characterOccurance(stringToTest) {
 // @TODO: We modify the global validator dependency here! https://github.com/chriso/validator.js/issues/525#issuecomment-213149570
 validator.extend = function (name, fn) {
     validator[name] = function () {
-        const args = Array.prototype.slice.call(arguments);
+        var args = Array.prototype.slice.call(arguments);
         assertString(args[0]);
         return fn.apply(validator, args);
     };
@@ -93,20 +93,19 @@ validator.extend('isSlug', function isSlug(str) {
  * valid password: `validationResult: {isValid: true}`
  */
 validatePassword = function validatePassword(password, email, blogTitle) {
-    const validationResult = {isValid: true};
-    const disallowedPasswords = ['password', 'ghost', 'passw0rd'];
-    let blogUrl = urlUtils.urlFor('home', true);
-
-    const badPasswords = [
-        '1234567890',
-        'qwertyuiop',
-        'qwertzuiop',
-        'asdfghjkl;',
-        'abcdefghij',
-        '0987654321',
-        '1q2w3e4r5t',
-        '12345asdfg'
-    ];
+    var validationResult = {isValid: true},
+        disallowedPasswords = ['password', 'ghost', 'passw0rd'],
+        blogUrl = urlUtils.urlFor('home', true),
+        badPasswords = [
+            '1234567890',
+            'qwertyuiop',
+            'qwertzuiop',
+            'asdfghjkl;',
+            'abcdefghij',
+            '0987654321',
+            '1q2w3e4r5t',
+            '12345asdfg'
+        ];
 
     blogTitle = blogTitle ? blogTitle : settingsCache.get('title');
     blogUrl = blogUrl.replace(/^http(s?):\/\//, '');
@@ -114,7 +113,7 @@ validatePassword = function validatePassword(password, email, blogTitle) {
     // password must be longer than 10 characters
     if (!validator.isLength(password, 10)) {
         validationResult.isValid = false;
-        validationResult.message = i18n.t('errors.models.user.passwordDoesNotComplyLength', {minLength: 10});
+        validationResult.message = common.i18n.t('errors.models.user.passwordDoesNotComplyLength', {minLength: 10});
 
         return validationResult;
     }
@@ -155,7 +154,7 @@ validatePassword = function validatePassword(password, email, blogTitle) {
 
     // Generic error message for the rules where no dedicated error massage is set
     if (!validationResult.isValid && !validationResult.message) {
-        validationResult.message = i18n.t('errors.models.user.passwordDoesNotComplySecurity');
+        validationResult.message = common.i18n.t('errors.models.user.passwordDoesNotComplySecurity');
     }
 
     return validationResult;
@@ -179,12 +178,12 @@ validatePassword = function validatePassword(password, email, blogTitle) {
 validateSchema = function validateSchema(tableName, model, options) {
     options = options || {};
 
-    const columns = _.keys(schema[tableName]);
-    let validationErrors = [];
+    var columns = _.keys(schema[tableName]),
+        validationErrors = [];
 
     _.each(columns, function each(columnKey) {
-        let message = ''; // KEEP: Validator.js only validates strings.
-        const strVal = _.toString(model.get(columnKey));
+        var message = '',
+            strVal = _.toString(model.get(columnKey)); // KEEP: Validator.js only validates strings.
 
         if (options.method !== 'insert' && !_.has(model.changed, columnKey)) {
             return;
@@ -196,11 +195,11 @@ validateSchema = function validateSchema(tableName, model, options) {
             !Object.prototype.hasOwnProperty.call(schema[tableName][columnKey], 'defaultTo')
         ) {
             if (validator.empty(strVal)) {
-                message = i18n.t('notices.data.validation.index.valueCannotBeBlank', {
+                message = common.i18n.t('notices.data.validation.index.valueCannotBeBlank', {
                     tableName: tableName,
                     columnKey: columnKey
                 });
-                validationErrors.push(new errors.ValidationError({
+                validationErrors.push(new common.errors.ValidationError({
                     message: message,
                     context: tableName + '.' + columnKey
                 }));
@@ -211,11 +210,11 @@ validateSchema = function validateSchema(tableName, model, options) {
         if (Object.prototype.hasOwnProperty.call(schema[tableName][columnKey], 'type')
             && schema[tableName][columnKey].type === 'bool') {
             if (!(validator.isBoolean(strVal) || validator.empty(strVal))) {
-                message = i18n.t('notices.data.validation.index.valueMustBeBoolean', {
+                message = common.i18n.t('notices.data.validation.index.valueMustBeBoolean', {
                     tableName: tableName,
                     columnKey: columnKey
                 });
-                validationErrors.push(new errors.ValidationError({
+                validationErrors.push(new common.errors.ValidationError({
                     message: message,
                     context: tableName + '.' + columnKey
                 }));
@@ -232,13 +231,13 @@ validateSchema = function validateSchema(tableName, model, options) {
             // check length
             if (Object.prototype.hasOwnProperty.call(schema[tableName][columnKey], 'maxlength')) {
                 if (!validator.isLength(strVal, 0, schema[tableName][columnKey].maxlength)) {
-                    message = i18n.t('notices.data.validation.index.valueExceedsMaxLength',
+                    message = common.i18n.t('notices.data.validation.index.valueExceedsMaxLength',
                         {
                             tableName: tableName,
                             columnKey: columnKey,
                             maxlength: schema[tableName][columnKey].maxlength
                         });
-                    validationErrors.push(new errors.ValidationError({
+                    validationErrors.push(new common.errors.ValidationError({
                         message: message,
                         context: tableName + '.' + columnKey
                     }));
@@ -253,11 +252,11 @@ validateSchema = function validateSchema(tableName, model, options) {
             // check type
             if (Object.prototype.hasOwnProperty.call(schema[tableName][columnKey], 'type')) {
                 if (schema[tableName][columnKey].type === 'integer' && !validator.isInt(strVal)) {
-                    message = i18n.t('notices.data.validation.index.valueIsNotInteger', {
+                    message = common.i18n.t('notices.data.validation.index.valueIsNotInteger', {
                         tableName: tableName,
                         columnKey: columnKey
                     });
-                    validationErrors.push(new errors.ValidationError({
+                    validationErrors.push(new common.errors.ValidationError({
                         message: message,
                         context: tableName + '.' + columnKey
                     }));
@@ -277,9 +276,9 @@ validateSchema = function validateSchema(tableName, model, options) {
 // settings are checked against the validation objects
 // form default-settings.json
 validateSettings = function validateSettings(defaultSettings, model) {
-    const values = model.toJSON();
-    let validationErrors = [];
-    const matchingDefault = defaultSettings[values.key];
+    var values = model.toJSON(),
+        validationErrors = [],
+        matchingDefault = defaultSettings[values.key];
 
     if (matchingDefault && matchingDefault.validations) {
         validationErrors = validationErrors.concat(validate(values.value, values.key, matchingDefault.validations, 'settings'));
@@ -314,12 +313,11 @@ validateSettings = function validateSettings(defaultSettings, model) {
  * @return {Array} returns an Array including the found validation errors (empty if none found);
  */
 validate = function validate(value, key, validations, tableName) {
-    const validationErrors = [];
-    let translation;
+    var validationErrors = [], translation;
     value = _.toString(value);
 
     _.each(validations, function each(validationOptions, validationName) {
-        let goodResult = true;
+        var goodResult = true;
 
         if (_.isBoolean(validationOptions)) {
             goodResult = validationOptions;
@@ -333,22 +331,21 @@ validate = function validate(value, key, validations, tableName) {
         // equivalent of validator.isSomething(option1, option2)
         if (validator[validationName].apply(validator, validationOptions) !== goodResult) {
             // CASE: You can define specific translations for validators e.g. isLength
-            if (i18n.doesTranslationKeyExist('notices.data.validation.index.validationFailedTypes.' + validationName)) {
-                translation = i18n.t('notices.data.validation.index.validationFailedTypes.' + validationName, _.merge({
+            if (common.i18n.doesTranslationKeyExist('notices.data.validation.index.validationFailedTypes.' + validationName)) {
+                translation = common.i18n.t('notices.data.validation.index.validationFailedTypes.' + validationName, _.merge({
                     validationName: validationName,
                     key: key,
                     tableName: tableName
                 }, validationOptions[1]));
             } else {
-                translation = i18n.t('notices.data.validation.index.validationFailed', {
+                translation = common.i18n.t('notices.data.validation.index.validationFailed', {
                     validationName: validationName,
                     key: key
                 });
             }
 
-            validationErrors.push(new errors.ValidationError({
-                message: translation,
-                context: `${tableName}.${key}`
+            validationErrors.push(new common.errors.ValidationError({
+                message: translation
             }));
         }
 

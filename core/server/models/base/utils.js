@@ -2,13 +2,11 @@
  * # Utils
  * Parts of the model code which can be split out and unit tested
  */
-const _ = require('lodash');
-
-const Promise = require('bluebird');
-const ObjectId = require('bson-objectid');
-const errors = require('@tryghost/errors');
-let attach;
-let detach;
+var _ = require('lodash'),
+    Promise = require('bluebird'),
+    ObjectId = require('bson-objectid'),
+    common = require('../../lib/common'),
+    attach, detach;
 
 /**
  * Attach wrapper (please never call attach manual!)
@@ -26,15 +24,15 @@ let detach;
 attach = function attach(Model, effectedModelId, relation, modelsToAttach, options) {
     options = options || {};
 
-    let fetchedModel;
-    const localOptions = {transacting: options.transacting};
+    var fetchedModel,
+        localOptions = {transacting: options.transacting};
 
     return Model.forge({id: effectedModelId}).fetch(localOptions)
         .then(function successFetchedModel(_fetchedModel) {
             fetchedModel = _fetchedModel;
 
             if (!fetchedModel) {
-                throw new errors.NotFoundError({level: 'critical', help: effectedModelId});
+                throw new common.errors.NotFoundError({level: 'critical', help: effectedModelId});
             }
 
             fetchedModel.related(relation).on('creating', function (collection, data) {
@@ -68,15 +66,15 @@ attach = function attach(Model, effectedModelId, relation, modelsToAttach, optio
 detach = function detach(Model, effectedModelId, relation, modelsToAttach, options) {
     options = options || {};
 
-    let fetchedModel;
-    const localOptions = {transacting: options.transacting};
+    var fetchedModel,
+        localOptions = {transacting: options.transacting};
 
     return Model.forge({id: effectedModelId}).fetch(localOptions)
         .then(function successFetchedModel(_fetchedModel) {
             fetchedModel = _fetchedModel;
 
             if (!fetchedModel) {
-                throw new errors.NotFoundError({level: 'critical', help: effectedModelId});
+                throw new common.errors.NotFoundError({level: 'critical', help: effectedModelId});
             }
 
             return Promise.resolve(modelsToAttach)

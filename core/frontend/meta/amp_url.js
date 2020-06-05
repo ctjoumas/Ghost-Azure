@@ -1,9 +1,9 @@
-const urlUtils = require('../../shared/url-utils');
-const getUrl = require('./url');
-const _ = require('lodash');
+var urlUtils = require('../../server/lib/url-utils'),
+    getUrl = require('./url'),
+    _ = require('lodash');
 
 function getAmplUrl(data) {
-    const context = data.context ? data.context : null;
+    var context = data.context ? data.context : null;
 
     if (_.includes(context, 'post') && !_.includes(context, 'amp')) {
         return urlUtils.urlJoin(urlUtils.urlFor('home', true), getUrl(data, false), 'amp/');

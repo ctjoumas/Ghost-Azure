@@ -42,7 +42,7 @@ module.exports.QUERY = {
 module.exports.TAXONOMIES = {
     tag: {
         filter: 'tags:\'%s\'+tags.visibility:public',
-        editRedirect: '#/tags/:slug/',
+        editRedirect: '#/settings/tags/:slug/',
         resource: 'tags'
     },
     author: {

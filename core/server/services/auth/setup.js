@@ -1,8 +1,6 @@
 const _ = require('lodash');
-const config = require('../../../shared/config');
-const errors = require('@tryghost/errors');
-const {i18n} = require('../../lib/common');
-const logging = require('../../../shared/logging');
+const config = require('../../config');
+const common = require('../../lib/common');
 const models = require('../../models');
 const mail = require('../mail');
 
@@ -29,11 +27,11 @@ function assertSetupCompleted(status) {
             return __;
         }
 
-        const completed = i18n.t('errors.api.authentication.setupAlreadyCompleted');
-        const notCompleted = i18n.t('errors.api.authentication.setupMustBeCompleted');
+        const completed = common.i18n.t('errors.api.authentication.setupAlreadyCompleted');
+        const notCompleted = common.i18n.t('errors.api.authentication.setupMustBeCompleted');
 
         function throwReason(reason) {
-            throw new errors.NoPermissionError({message: reason});
+            throw new common.errors.NoPermissionError({message: reason});
         }
 
         if (isSetup) {
@@ -50,8 +48,8 @@ async function setupUser(userData) {
     const owner = await models.User.findOne({role: 'Owner', status: 'all'});
 
     if (!owner) {
-        throw new errors.GhostError({
-            message: i18n.t('errors.api.authentication.setupUnableToRun')
+        throw new common.errors.GhostError({
+            message: common.i18n.t('errors.api.authentication.setupUnableToRun')
         });
     }
 
@@ -76,7 +74,7 @@ async function doSettings(data, settingsAPI) {
 
     userSettings = [
         {key: 'title', value: blogTitle.trim()},
-        {key: 'description', value: i18n.t('common.api.authentication.sampleBlogDescription')}
+        {key: 'description', value: common.i18n.t('common.api.authentication.sampleBlogDescription')}
     ];
 
     await settingsAPI.edit({settings: userSettings}, context);
@@ -93,23 +91,22 @@ function sendWelcomeEmail(email, mailAPI) {
         return mail.utils.generateContent({data: data, template: 'welcome'})
             .then((content) => {
                 const message = {
-                    to: email,
-                    subject: i18n.t('common.api.authentication.mail.yourNewGhostBlog'),
-                    html: content.html,
-                    text: content.text
-                };
-
-                const payload = {
-                    mail: [{
-                        message: message,
-                        options: {}
-                    }]
-                };
+                        to: email,
+                        subject: common.i18n.t('common.api.authentication.mail.yourNewGhostBlog'),
+                        html: content.html,
+                        text: content.text
+                    },
+                    payload = {
+                        mail: [{
+                            message: message,
+                            options: {}
+                        }]
+                    };
 
                 mailAPI.send(payload, {context: {internal: true}})
                     .catch((err) => {
-                        err.context = i18n.t('errors.api.authentication.unableToSendWelcomeEmail');
-                        logging.error(err);
+                        err.context = common.i18n.t('errors.api.authentication.unableToSendWelcomeEmail');
+                        common.logging.error(err);
                     });
             });
     }

@@ -1,6 +1,5 @@
 const debug = require('ghost-ignition').debug('models:plugins:filter');
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
+const common = require('../../lib/common');
 
 const RELATIONS = {
     tags: {
@@ -17,13 +16,6 @@ const RELATIONS = {
         joinTable: 'posts_authors',
         joinFrom: 'post_id',
         joinTo: 'author_id'
-    },
-    labels: {
-        tableName: 'labels',
-        type: 'manyToMany',
-        joinTable: 'members_labels',
-        joinFrom: 'member_id',
-        joinTo: 'label_id'
     }
 };
 
@@ -47,12 +39,6 @@ const EXPANSIONS = [{
 }, {
     key: 'tags',
     replacement: 'tags.slug'
-}, {
-    key: 'label',
-    replacement: 'labels.slug'
-}, {
-    key: 'labels',
-    replacement: 'labels.slug'
 }];
 
 const filter = function filter(Bookshelf) {
@@ -75,7 +61,6 @@ const filter = function filter(Bookshelf) {
             let extra = this.extraFilters(options);
             let overrides = this.enforcedFilters(options);
             let defaults = this.defaultFilters(options);
-            let transformer = options.mongoTransformer;
 
             debug('custom', custom);
             debug('extra', extra);
@@ -96,13 +81,12 @@ const filter = function filter(Bookshelf) {
                         relations: RELATIONS,
                         expansions: EXPANSIONS,
                         overrides: overrides,
-                        defaults: defaults,
-                        transformer: transformer
+                        defaults: defaults
                     }).querySQL(qb);
                 });
             } catch (err) {
-                throw new errors.BadRequestError({
-                    message: i18n.t('errors.models.plugins.filter.errorParsing'),
+                throw new common.errors.BadRequestError({
+                    message: common.i18n.t('errors.models.plugins.filter.errorParsing'),
                     err: err
                 });
             }

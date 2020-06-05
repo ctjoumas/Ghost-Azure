@@ -3,8 +3,8 @@ const crypto = require('crypto');
 module.exports.generateFromContent = function generateFromContent(options) {
     options = options || {};
 
-    const hash = crypto.createHash('sha256');
-    const content = options.content;
+    const hash = crypto.createHash('sha256'),
+        content = options.content;
 
     let text = '';
 
@@ -17,10 +17,10 @@ module.exports.generateFromContent = function generateFromContent(options) {
 module.exports.generateFromEmail = function generateFromEmail(options) {
     options = options || {};
 
-    const hash = crypto.createHash('sha256');
-    const expires = options.expires;
-    const email = options.email;
-    const secret = options.secret;
+    const hash = crypto.createHash('sha256'),
+        expires = options.expires,
+        email = options.email,
+        secret = options.secret;
 
     let text = '';
 
@@ -36,12 +36,12 @@ module.exports.resetToken = {
     generateHash: function generateHash(options) {
         options = options || {};
 
-        const hash = crypto.createHash('sha256');
-        const expires = options.expires;
-        const email = options.email;
-        const dbHash = options.dbHash;
-        const password = options.password;
-        let text = '';
+        var hash = crypto.createHash('sha256'),
+            expires = options.expires,
+            email = options.email,
+            dbHash = options.dbHash,
+            password = options.password,
+            text = '';
 
         hash.update(String(expires));
         hash.update(email.toLocaleLowerCase());
@@ -54,11 +54,11 @@ module.exports.resetToken = {
     extract: function extract(options) {
         options = options || {};
 
-        const token = options.token;
-        const tokenText = Buffer.from(token, 'base64').toString('ascii');
-        let parts;
-        let expires;
-        let email;
+        var token = options.token,
+            tokenText = Buffer.from(token, 'base64').toString('ascii'),
+            parts,
+            expires,
+            email;
 
         parts = tokenText.split('|');
 
@@ -78,13 +78,13 @@ module.exports.resetToken = {
     compare: function compare(options) {
         options = options || {};
 
-        const tokenToCompare = options.token;
-        const parts = exports.resetToken.extract({token: tokenToCompare});
-        const dbHash = options.dbHash;
-        const password = options.password;
-        let generatedToken;
-        let diff = 0;
-        let i;
+        var tokenToCompare = options.token,
+            parts = exports.resetToken.extract({token: tokenToCompare}),
+            dbHash = options.dbHash,
+            password = options.password,
+            generatedToken,
+            diff = 0,
+            i;
 
         if (isNaN(parts.expires)) {
             return false;

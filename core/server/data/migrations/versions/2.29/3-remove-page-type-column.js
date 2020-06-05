@@ -1,7 +1,7 @@
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 const commands = require('../../../schema').commands;
 
-const createLog = type => msg => logging[type](msg);
+const createLog = type => msg => common.logging[type](msg);
 
 function createColumnMigration({table, column, dbIsInCorrectState, operation, operationVerb, columnDefinition}) {
     return function columnMigrations({transacting}) {

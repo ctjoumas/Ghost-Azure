@@ -1,29 +1,30 @@
 // # Fixture Utils
 // Standalone file which can be required to help with advanced operations on the fixtures.json file
-const _ = require('lodash');
+var _ = require('lodash'),
+    Promise = require('bluebird'),
+    common = require('../../../lib/common'),
+    models = require('../../../models'),
+    baseUtils = require('../../../models/base/utils'),
+    sequence = require('../../../lib/promise/sequence'),
+    moment = require('moment'),
 
-const Promise = require('bluebird');
-const logging = require('../../../../shared/logging');
-const models = require('../../../models');
-const baseUtils = require('../../../models/base/utils');
-const sequence = require('../../../lib/promise/sequence');
-const moment = require('moment');
-const fixtures = require('./fixtures');
+    fixtures = require('./fixtures'),
 
-// Private
-let matchFunc;
+    // Private
+    matchFunc,
+    matchObj,
+    fetchRelationData,
+    findRelationFixture,
+    findModelFixture,
 
-let matchObj;
-let fetchRelationData;
-let findRelationFixture;
-let findModelFixture;
-let addFixturesForModel;
-let addFixturesForRelation;
-let removeFixturesForModel;
-let removeFixturesForRelation;
-let findModelFixtureEntry;
-let findModelFixtures;
-let findPermissionRelationsForObject;
+    addFixturesForModel,
+    addFixturesForRelation,
+    removeFixturesForModel,
+    removeFixturesForRelation,
+
+    findModelFixtureEntry,
+    findModelFixtures,
+    findPermissionRelationsForObject;
 
 /**
  * ### Match Func
@@ -40,7 +41,7 @@ let findPermissionRelationsForObject;
 matchFunc = function matchFunc(match, key, value) {
     if (_.isArray(match)) {
         return function (item) {
-            let valueTest = true;
+            var valueTest = true;
 
             if (_.isArray(value)) {
                 valueTest = value.indexOf(item.get(match[1])) > -1;
@@ -59,7 +60,7 @@ matchFunc = function matchFunc(match, key, value) {
 };
 
 matchObj = function matchObj(match, item) {
-    const matchObj = {};
+    var matchObj = {};
 
     if (_.isArray(match)) {
         _.each(match, function (matchProp) {
@@ -81,12 +82,11 @@ matchObj = function matchObj(match, item) {
  * @returns {Promise<*>}
  */
 fetchRelationData = function fetchRelationData(relation, options) {
-    const fromOptions = _.extend({}, options, {withRelated: [relation.from.relation]});
-
-    const props = {
-        from: models[relation.from.model].findAll(fromOptions),
-        to: models[relation.to.model].findAll(options)
-    };
+    var fromOptions = _.extend({}, options, {withRelated: [relation.from.relation]}),
+        props = {
+            from: models[relation.from.model].findAll(fromOptions),
+            to: models[relation.to.model].findAll(options)
+        };
 
     return Promise.props(props);
 };
@@ -150,23 +150,22 @@ addFixturesForModel = function addFixturesForModel(modelFixture, options = {}) {
  * @returns {Promise.<*>}
  */
 addFixturesForRelation = function addFixturesForRelation(relationFixture, options) {
-    const ops = [];
-    let max = 0;
+    var ops = [], max = 0;
 
     return fetchRelationData(relationFixture, options).then(function getRelationOps(data) {
         _.each(relationFixture.entries, function processEntries(entry, key) {
-            const fromItem = data.from.find(matchFunc(relationFixture.from.match, key));
+            var fromItem = data.from.find(matchFunc(relationFixture.from.match, key));
 
             // CASE: You add new fixtures e.g. a new role in a new release.
             // As soon as an **older** migration script wants to add permissions for any resource, it iterates over the
             // permissions for each role. But if the role does not exist yet, it won't find the matching db entry and breaks.
             if (!fromItem) {
-                logging.warn('Skip: Target database entry not found for key: ' + key);
+                common.logging.warn('Skip: Target database entry not found for key: ' + key);
                 return Promise.resolve();
             }
 
             _.each(entry, function processEntryValues(value, key) {
-                let toItems = data.to.filter(matchFunc(relationFixture.to.match, key, value));
+                var toItems = data.to.filter(matchFunc(relationFixture.to.match, key, value));
                 max += toItems.length;
 
                 // Remove any duplicates that already exist in the collection
@@ -228,7 +227,7 @@ findModelFixtureEntry = function findModelFixtureEntry(modelName, matchExpr) {
  * @returns {Object} model fixture
  */
 findModelFixtures = function findModelFixtures(modelName, matchExpr) {
-    const foundModel = _.cloneDeep(findModelFixture(modelName));
+    var foundModel = _.cloneDeep(findModelFixture(modelName));
     foundModel.entries = _.filter(foundModel.entries, matchExpr);
     return foundModel;
 };
@@ -255,7 +254,7 @@ findRelationFixture = function findRelationFixture(from, to) {
  */
 findPermissionRelationsForObject = function findPermissionRelationsForObject(objName, role) {
     // Make a copy and delete any entries we don't want
-    const foundRelation = _.cloneDeep(findRelationFixture('Role', 'Permission'));
+    var foundRelation = _.cloneDeep(findRelationFixture('Role', 'Permission'));
 
     _.each(foundRelation.entries, function (entry, key) {
         _.each(entry, function (perm, obj) {

@@ -1,8 +1,8 @@
 const debug = require('ghost-ignition').debug('web:admin:controller');
 const path = require('path');
-const config = require('../../../shared/config');
+const config = require('../../config');
 const updateCheck = require('../../update-check');
-const logging = require('../../../shared/logging');
+const common = require('../../lib/common');
 
 /**
  * @description Admin controller to handle /ghost/ requests.
@@ -18,7 +18,7 @@ module.exports = function adminController(req, res) {
     // CASE: trigger update check unit and let it run in background, don't block the admin rendering
     updateCheck()
         .catch((err) => {
-            logging.error(err);
+            common.logging.error(err);
         });
 
     const defaultTemplate = config.get('env') === 'production' ? 'default-prod.html' : 'default.html';

@@ -1,5 +1,5 @@
 const ParentRouter = require('./ParentRouter');
-const urlUtils = require('../../../shared/url-utils');
+const urlUtils = require('../../../server/lib/url-utils');
 const controllers = require('./controllers');
 
 /**

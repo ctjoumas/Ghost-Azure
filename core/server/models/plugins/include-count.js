@@ -1,10 +1,13 @@
-const _debug = require('ghost-ignition').debug._base;
-const debug = _debug('ghost-query');
-const _ = require('lodash');
+var _debug = require('ghost-ignition').debug._base,
+    debug = _debug('ghost-query'),
+    _ = require('lodash');
 
 module.exports = function (Bookshelf) {
-    const modelProto = Bookshelf.Model.prototype;
-    const countQueryBuilder = {
+    var modelProto = Bookshelf.Model.prototype,
+        Model,
+        countQueryBuilder;
+
+    countQueryBuilder = {
         tags: {
             posts: function addPostCountToTags(model, options) {
                 model.query('columns', 'tags.*', function (qb) {
@@ -16,7 +19,7 @@ module.exports = function (Bookshelf) {
 
                     if (options.context && options.context.public) {
                         // @TODO use the filter behavior for posts
-                        qb.andWhere('posts.type', '=', 'post');
+                        qb.andWhere('posts.page', '=', false);
                         qb.andWhere('posts.status', '=', 'published');
                     }
                 });
@@ -33,7 +36,7 @@ module.exports = function (Bookshelf) {
 
                     if (options.context && options.context.public) {
                         // @TODO use the filter behavior for posts
-                        qb.andWhere('posts.type', '=', 'post');
+                        qb.andWhere('posts.page', '=', false);
                         qb.andWhere('posts.status', '=', 'published');
                     }
                 });
@@ -41,13 +44,13 @@ module.exports = function (Bookshelf) {
         }
     };
 
-    const Model = Bookshelf.Model.extend({
+    Model = Bookshelf.Model.extend({
         addCounts: function (options) {
             if (!options) {
                 return;
             }
 
-            const tableName = _.result(this, 'tableName');
+            var tableName = _.result(this, 'tableName');
 
             if (options.withRelated && options.withRelated.indexOf('count.posts') > -1) {
                 // remove post_count from withRelated
@@ -83,11 +86,11 @@ module.exports = function (Bookshelf) {
         },
 
         serialize: function serialize(options) {
-            const attrs = modelProto.serialize.call(this, options);
-            const countRegex = /^(count)(__)(.*)$/;
+            var attrs = modelProto.serialize.call(this, options),
+                countRegex = /^(count)(__)(.*)$/;
 
             _.forOwn(attrs, function (value, key) {
-                const match = key.match(countRegex);
+                var match = key.match(countRegex);
                 if (match) {
                     attrs[match[1]] = attrs[match[1]] || {};
                     attrs[match[1]][match[3]] = value;

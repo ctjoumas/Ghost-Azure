@@ -5,5 +5,13 @@ module.exports = {
 
     get events() {
         return require('./events');
+    },
+
+    get errors() {
+        return require('./errors');
+    },
+
+    get logging() {
+        return require('./logging');
     }
 };

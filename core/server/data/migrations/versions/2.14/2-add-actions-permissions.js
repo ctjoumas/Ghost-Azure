@@ -1,7 +1,7 @@
 const _ = require('lodash');
 const utils = require('../../../schema/fixtures/utils');
 const permissions = require('../../../../services/permissions');
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 const resource = 'action';
 const _private = {};
 
@@ -15,9 +15,9 @@ _private.getRelations = function getRelations() {
 
 _private.printResult = function printResult(result, message) {
     if (result.done === result.expected) {
-        logging.info(message);
+        common.logging.info(message);
     } else {
-        logging.warn('(' + result.done + '/' + result.expected + ') ' + message);
+        common.logging.warn('(' + result.done + '/' + result.expected + ') ' + message);
     }
 };
 

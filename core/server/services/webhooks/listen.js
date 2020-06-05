@@ -1,8 +1,10 @@
 const _ = require('lodash');
-const {events} = require('../../lib/common');
+const common = require('../../lib/common');
 const trigger = require('./trigger');
 
 const WEBHOOKS = [
+    'subscriber.added',
+    'subscriber.deleted',
     'site.changed',
 
     'post.added',
@@ -29,10 +31,6 @@ const WEBHOOKS = [
     'tag.edited',
     'tag.deleted',
 
-    'member.added',
-    'member.deleted',
-    'member.edited',
-
     'post.tag.attached',
     'post.tag.detached',
     'page.tag.attached',
@@ -41,7 +39,7 @@ const WEBHOOKS = [
 
 const listen = () => {
     _.each(WEBHOOKS, (event) => {
-        events.on(event, (model, options) => {
+        common.events.on(event, (model, options) => {
             // CASE: avoid triggering webhooks when importing
             if (options && options.importing) {
                 return;

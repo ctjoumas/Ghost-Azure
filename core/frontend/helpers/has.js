@@ -4,14 +4,13 @@
 //
 // Checks if a post has a particular property
 
-const {logging, i18n} = require('../services/proxy');
-const _ = require('lodash');
-const validAttrs = ['tag', 'author', 'slug','visibility', 'id', 'number', 'index', 'any', 'all'];
+var proxy = require('./proxy'),
+    _ = require('lodash'),
+    logging = proxy.logging,
+    i18n = proxy.i18n,
+    validAttrs = ['tag', 'author', 'slug', 'id', 'number', 'index', 'any', 'all'];
 
 function handleCount(ctxAttr, data) {
-    if (!data || !_.isFinite(data.length)) {
-        return false;
-    }
     let count;
 
     if (ctxAttr.match(/count:\d+/)) {
@@ -54,7 +53,7 @@ function handleTag(data, attrs) {
 }
 
 function evaluateAuthorList(expr, authors) {
-    const authorList = expr.split(',').map(function (v) {
+    var authorList = expr.split(',').map(function (v) {
         return v.trim().toLocaleLowerCase();
     });
 
@@ -76,7 +75,7 @@ function handleAuthor(data, attrs) {
 }
 
 function evaluateIntegerMatch(expr, integer) {
-    const nthMatch = expr.match(/^nth:(\d+)/);
+    var nthMatch = expr.match(/^nth:(\d+)/);
     if (nthMatch) {
         return integer % parseInt(nthMatch[1], 10) === 0;
     }
@@ -118,41 +117,36 @@ module.exports = function has(options) {
     options.hash = options.hash || {};
     options.data = options.data || {};
 
-    const self = this;
-    const attrs = _.pick(options.hash, validAttrs);
-    const data = _.pick(options.data, ['site', 'config', 'labs']);
-
-    const checks = {
-        tag: function () {
-            return handleTag(self, attrs);
+    var self = this,
+        attrs = _.pick(options.hash, validAttrs),
+        data = _.pick(options.data, ['blog', 'config', 'labs']),
+        checks = {
+            tag: function () {
+                return handleTag(self, attrs);
+            },
+            author: function () {
+                return handleAuthor(self, attrs);
+            },
+            number: function () {
+                return attrs.number && evaluateIntegerMatch(attrs.number, options.data.number) || false;
+            },
+            index: function () {
+                return attrs.index && evaluateIntegerMatch(attrs.index, options.data.index) || false;
+            },
+            slug: function () {
+                return attrs.slug && evaluateStringMatch(attrs.slug, self.slug, true) || false;
+            },
+            id: function () {
+                return attrs.id && evaluateStringMatch(attrs.id, self.id, true) || false;
+            },
+            any: function () {
+                return attrs.any && evaluateList('some', attrs.any, self, data) || false;
+            },
+            all: function () {
+                return attrs.all && evaluateList('every', attrs.all, self, data) || false;
+            }
         },
-        author: function () {
-            return handleAuthor(self, attrs);
-        },
-        number: function () {
-            return attrs.number && evaluateIntegerMatch(attrs.number, options.data.number) || false;
-        },
-        index: function () {
-            return attrs.index && evaluateIntegerMatch(attrs.index, options.data.index) || false;
-        },
-        visibility: function () {
-            return attrs.visibility && evaluateStringMatch(attrs.visibility, self.visibility, true) || false;
-        },
-        slug: function () {
-            return attrs.slug && evaluateStringMatch(attrs.slug, self.slug, true) || false;
-        },
-        id: function () {
-            return attrs.id && evaluateStringMatch(attrs.id, self.id, true) || false;
-        },
-        any: function () {
-            return attrs.any && evaluateList('some', attrs.any, self, data) || false;
-        },
-        all: function () {
-            return attrs.all && evaluateList('every', attrs.all, self, data) || false;
-        }
-    };
-
-    let result;
+        result;
 
     if (_.isEmpty(attrs)) {
         logging.warn(i18n.t('warnings.helpers.has.invalidAttribute'));

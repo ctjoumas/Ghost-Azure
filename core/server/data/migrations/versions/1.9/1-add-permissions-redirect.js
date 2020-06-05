@@ -1,9 +1,9 @@
-const _ = require('lodash');
-const utils = require('../../../schema/fixtures/utils');
-const permissions = require('../../../../services/permissions');
-const logging = require('../../../../../shared/logging');
-const resource = 'redirect';
-const _private = {};
+var _ = require('lodash'),
+    utils = require('../../../schema/fixtures/utils'),
+    permissions = require('../../../../services/permissions'),
+    common = require('../../../../lib/common'),
+    resource = 'redirect',
+    _private = {};
 
 _private.getPermissions = function getPermissions() {
     return utils.findModelFixtures('Permission', {object_type: resource});
@@ -15,9 +15,9 @@ _private.getRelations = function getRelations() {
 
 _private.printResult = function printResult(result, message) {
     if (result.done === result.expected) {
-        logging.info(message);
+        common.logging.info(message);
     } else {
-        logging.warn('(' + result.done + '/' + result.expected + ') ' + message);
+        common.logging.warn('(' + result.done + '/' + result.expected + ') ' + message);
     }
 };
 
@@ -26,12 +26,11 @@ module.exports.config = {
 };
 
 module.exports.up = function addRedirectsPermissions(options) {
-    const modelToAdd = _private.getPermissions();
-    const relationToAdd = _private.getRelations();
-
-    const localOptions = _.merge({
-        context: {internal: true}
-    }, options);
+    var modelToAdd = _private.getPermissions(),
+        relationToAdd = _private.getRelations(),
+        localOptions = _.merge({
+            context: {internal: true}
+        }, options);
 
     return utils.addFixturesForModel(modelToAdd, localOptions).then(function (result) {
         _private.printResult(result, 'Adding permissions fixtures for ' + resource + 's');

@@ -1,7 +1,6 @@
 const debug = require('ghost-ignition').debug('services:routing:static-routes-router');
-const {events} = require('../../../server/lib/common');
-const errors = require('@tryghost/errors');
-const urlUtils = require('../../../shared/url-utils');
+const common = require('../../../server/lib/common');
+const urlUtils = require('../../../server/lib/url-utils');
 const RSSRouter = require('./RSSRouter');
 const controllers = require('./controllers');
 const middlewares = require('./middlewares');
@@ -62,7 +61,7 @@ class StaticRoutesRouter extends ParentRouter {
         this.router().param('page', middlewares.pageParam);
         this.mountRoute(urlUtils.urlJoin(this.route.value, 'page', ':page(\\d+)'), controllers[this.controller]);
 
-        events.emit('router.created', this);
+        common.events.emit('router.created', this);
     }
 
     /**
@@ -98,7 +97,7 @@ class StaticRoutesRouter extends ParentRouter {
         // REGISTER: static route
         this.mountRoute(this.route.value, controllers.static);
 
-        events.emit('router.created', this);
+        common.events.emit('router.created', this);
     }
 
     /**
@@ -112,11 +111,7 @@ class StaticRoutesRouter extends ParentRouter {
         res.routerOptions = {
             type: 'custom',
             templates: this.templates,
-            defaultTemplate: () => {
-                throw new errors.IncorrectUsageError({
-                    message: `Missing template ${res.routerOptions.templates.map(x => `${x}.hbs`).join(', ')} for route "${req.originalUrl}".`
-                });
-            },
+            defaultTemplate: 'default',
             data: this.data.query,
             context: [this.routerName],
             contentType: this.contentType

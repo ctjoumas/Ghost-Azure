@@ -1,12 +1,13 @@
-const moment = require('moment-timezone');
-const Promise = require('bluebird');
-const _ = require('lodash');
-const errors = require('@tryghost/errors');
+var moment = require('moment-timezone'),
+    Promise = require('bluebird'),
+    _ = require('lodash'),
+    common = require('../../lib/common');
 
 module.exports = function (Bookshelf) {
-    const ParentModel = Bookshelf.Model;
+    var ParentModel = Bookshelf.Model,
+        Model;
 
-    const Model = Bookshelf.Model.extend({
+    Model = Bookshelf.Model.extend({
         /**
          * Update collision protection.
          *
@@ -23,9 +24,9 @@ module.exports = function (Bookshelf) {
          * the same current database values and both would succeed to update and override each other.
          */
         sync: function timestamp(options) {
-            const parentSync = ParentModel.prototype.sync.apply(this, arguments);
-            const originalUpdateSync = parentSync.update;
-            const self = this;
+            var parentSync = ParentModel.prototype.sync.apply(this, arguments),
+                originalUpdateSync = parentSync.update,
+                self = this;
 
             // CASE: only enabled for posts table
             if (this.tableName !== 'posts' ||
@@ -58,7 +59,7 @@ module.exports = function (Bookshelf) {
                         if (Object.keys(changed).length) {
                             if (clientUpdatedAt.diff(serverUpdatedAt) !== 0) {
                                 // @NOTE: This will rollback the update. We cannot know if relations were updated before doing the update.
-                                return Promise.reject(new errors.UpdateCollisionError({
+                                return Promise.reject(new common.errors.UpdateCollisionError({
                                     message: 'Saving failed! Someone else is editing this post.',
                                     code: 'UPDATE_COLLISION',
                                     level: 'critical',

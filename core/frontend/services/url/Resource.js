@@ -1,6 +1,5 @@
-const EventEmitter = require('events').EventEmitter;
-const logging = require('../../../shared/logging');
-const errors = require('@tryghost/errors');
+const EventEmitter = require('events').EventEmitter,
+    common = require('../../../server/lib/common');
 
 /**
  * Resource cache.
@@ -36,7 +35,7 @@ class Resource extends EventEmitter {
         if (!this.config.reserved) {
             this.config.reserved = true;
         } else {
-            logging.error(new errors.InternalServerError({
+            common.logging.error(new common.errors.InternalServerError({
                 message: 'Resource is already taken. This should not happen.',
                 code: 'URLSERVICE_RESERVE_RESOURCE'
             }));

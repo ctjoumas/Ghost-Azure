@@ -1,11 +1,11 @@
-const _ = require('lodash');
-const Promise = require('bluebird');
-const storage = require('../../../adapters/storage');
-let replaceImage;
-let ImageImporter;
-let preProcessPosts;
-let preProcessTags;
-let preProcessUsers;
+var _ = require('lodash'),
+    Promise = require('bluebird'),
+    storage = require('../../../adapters/storage'),
+    replaceImage,
+    ImageImporter,
+    preProcessPosts,
+    preProcessTags,
+    preProcessUsers;
 
 replaceImage = function (markdown, image) {
     if (!markdown) {
@@ -13,7 +13,7 @@ replaceImage = function (markdown, image) {
     }
 
     // Normalizes to include a trailing slash if there was one
-    const regex = new RegExp('(/)?' + image.originalPath, 'gm');
+    var regex = new RegExp('(/)?' + image.originalPath, 'gm');
 
     return markdown.replace(regex, image.newPath);
 };
@@ -64,7 +64,7 @@ ImageImporter = {
         return importData;
     },
     doImport: function (imageData) {
-        const store = storage.getStorage();
+        var store = storage.getStorage();
 
         return Promise.map(imageData, function (image) {
             return store.save(image, image.targetDir).then(function (result) {

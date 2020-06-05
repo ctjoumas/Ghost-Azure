@@ -1,7 +1,7 @@
 const jwt = require('express-jwt');
 const membersService = require('../../members');
 const labs = require('../../labs');
-const config = require('../../../../shared/config');
+const config = require('../../../config');
 
 let UNO_MEMBERINO;
 

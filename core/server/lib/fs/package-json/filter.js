@@ -1,10 +1,10 @@
-const _ = require('lodash');
-const notAPackageRegex = /^\.|_messages|README.md/i;
-let filterPackages;
+var _ = require('lodash'),
+    notAPackageRegex = /^\.|_messages|README.md/i,
+    filterPackages;
 
 /**
  * ### Filter Packages
- * Normalizes packages read by read-packages so that the themes module can use them.
+ * Normalizes packages read by read-packages so that the apps and themes modules can use them.
  * Iterates over each package and return an array of objects which are simplified representations of the package
  * with 3 properties:
  * - `name`    - the package name
@@ -17,16 +17,16 @@ let filterPackages;
  *
  * @param   {object}            packages    as returned by read-packages
  * @param   {array/string}      active      as read from the settings object
- * @returns {Array}                         of objects with useful info about themes
+ * @returns {Array}                         of objects with useful info about apps / themes
  */
 filterPackages = function filterPackages(packages, active) {
-    // turn active into an array if it isn't one, so this function can deal with lists and one-offs
+    // turn active into an array (so themes and apps can be checked the same)
     if (!Array.isArray(active)) {
         active = [active];
     }
 
     return _.reduce(packages, function (result, pkg, key) {
-        let item = {};
+        var item = {};
         if (!key.match(notAPackageRegex)) {
             item = {
                 name: key,

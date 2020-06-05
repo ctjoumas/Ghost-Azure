@@ -1,24 +1,25 @@
 /**
  * Dependencies
  */
-const Promise = require('bluebird');
+var Promise = require('bluebird'),
+    _ = require('lodash'),
+    join = require('path').join,
+    fs = require('fs-extra'),
+    parsePackageJson = require('./parse'),
+    common = require('../../common'),
 
-const _ = require('lodash');
-const join = require('path').join;
-const fs = require('fs-extra');
-const parsePackageJson = require('./parse');
-const errors = require('@tryghost/errors');
-const notAPackageRegex = /^\.|_messages|README.md|node_modules|bower_components/i;
-const packageJSONPath = 'package.json';
-let readPackage;
-let readPackages;
-let processPackage;
+    notAPackageRegex = /^\.|_messages|README.md|node_modules|bower_components/i,
+    packageJSONPath = 'package.json',
+
+    readPackage,
+    readPackages,
+    processPackage;
 
 /**
  * Recursively read directory and find the packages in it
  */
 processPackage = function processPackage(absolutePath, packageName) {
-    const pkg = {
+    var pkg = {
         name: packageName,
         path: absolutePath
     };
@@ -38,7 +39,7 @@ processPackage = function processPackage(absolutePath, packageName) {
 };
 
 readPackage = function readPackage(packagePath, packageName) {
-    const absolutePath = join(packagePath, packageName);
+    var absolutePath = join(packagePath, packageName);
     return fs.stat(absolutePath)
         .then(function (stat) {
             if (!stat.isDirectory()) {
@@ -47,13 +48,13 @@ readPackage = function readPackage(packagePath, packageName) {
 
             return processPackage(absolutePath, packageName)
                 .then(function gotPackage(pkg) {
-                    const res = {};
+                    var res = {};
                     res[packageName] = pkg;
                     return res;
                 });
         })
         .catch(function (err) {
-            return Promise.reject(new errors.NotFoundError({
+            return Promise.reject(new common.errors.NotFoundError({
                 message: 'Package not found',
                 err: err,
                 help: 'path: ' + packagePath,
@@ -75,7 +76,7 @@ readPackages = function readPackages(packagePath) {
             });
         })
         .map(function readPackageJson(packageName) {
-            const absolutePath = join(packagePath, packageName);
+            var absolutePath = join(packagePath, packageName);
             return processPackage(absolutePath, packageName);
         })
         .then(function (packages) {

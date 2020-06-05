@@ -1,38 +1,32 @@
-const _ = require('lodash');
-const Promise = require('bluebird');
-const db = require('../../data/db');
-const commands = require('../schema').commands;
-const ghostVersion = require('../../lib/ghost-version');
-const {i18n} = require('../../lib/common');
-const logging = require('../../../shared/logging');
-const errors = require('@tryghost/errors');
-const security = require('../../lib/security');
-const models = require('../../models');
-const EXCLUDED_TABLES = ['sessions', 'mobiledoc_revisions'];
+var _ = require('lodash'),
+    Promise = require('bluebird'),
+    db = require('../../data/db'),
+    commands = require('../schema').commands,
+    ghostVersion = require('../../lib/ghost-version'),
+    common = require('../../lib/common'),
+    security = require('../../lib/security'),
+    models = require('../../models'),
+    EXCLUDED_TABLES = ['accesstokens', 'refreshtokens', 'clients', 'client_trusted_domains', 'sessions', 'mobiledoc_revisions'],
+    EXCLUDED_FIELDS_CONDITIONS = {
+        settings: [{
+            operator: 'whereNot',
+            key: 'key',
+            value: 'permalinks'
+        }]
+    },
+    modelOptions = {context: {internal: true}},
 
-const EXCLUDED_FIELDS_CONDITIONS = {
-    settings: [{
-        operator: 'whereNot',
-        key: 'key',
-        value: 'permalinks'
-    }]
-};
+    // private
+    getVersionAndTables,
+    exportTable,
 
-const modelOptions = {context: {internal: true}};
-
-// private
-let getVersionAndTables;
-
-let exportTable;
-
-// public
-let doExport;
-
-let exportFileName;
+    // public
+    doExport,
+    exportFileName;
 
 exportFileName = function exportFileName(options) {
-    const datetime = require('moment')().format('YYYY-MM-DD-HH-mm-ss');
-    let title = '';
+    var datetime = require('moment')().format('YYYY-MM-DD-HH-mm-ss'),
+        title = '';
 
     options = options || {};
 
@@ -48,13 +42,13 @@ exportFileName = function exportFileName(options) {
 
         return title + 'ghost.' + datetime + '.json';
     }).catch(function (err) {
-        logging.error(new errors.GhostError({err: err}));
+        common.logging.error(new common.errors.GhostError({err: err}));
         return 'ghost.' + datetime + '.json';
     });
 };
 
 getVersionAndTables = function getVersionAndTables(options) {
-    const props = {
+    var props = {
         version: ghostVersion.full,
         tables: commands.getTables(options.transacting)
     };
@@ -80,8 +74,7 @@ exportTable = function exportTable(tableName, options) {
 doExport = function doExport(options) {
     options = options || {include: []};
 
-    let tables;
-    let version;
+    var tables, version;
 
     return getVersionAndTables(options).then(function exportAllTables(result) {
         tables = result.tables;
@@ -91,7 +84,7 @@ doExport = function doExport(options) {
             return exportTable(tableName, options);
         });
     }).then(function formatData(tableData) {
-        const exportData = {
+        var exportData = {
             meta: {
                 exported_on: new Date().getTime(),
                 version: version
@@ -107,9 +100,9 @@ doExport = function doExport(options) {
 
         return exportData;
     }).catch(function (err) {
-        return Promise.reject(new errors.DataExportError({
+        return Promise.reject(new common.errors.DataExportError({
             err: err,
-            context: i18n.t('errors.data.export.errorExportingData')
+            context: common.i18n.t('errors.data.export.errorExportingData')
         }));
     });
 };

@@ -2,9 +2,9 @@ const _ = require('lodash');
 const Promise = require('bluebird');
 const debug = require('ghost-ignition').debug('services:url:resources');
 const Resource = require('./Resource');
-const config = require('../../../shared/config');
+const config = require('../../../server/config');
 const models = require('../../../server/models');
-const {events} = require('../../../server/lib/common');
+const common = require('../../../server/lib/common');
 
 /**
  * @description At the moment the resources class is directly responsible for data population
@@ -38,7 +38,7 @@ class Resources {
             listener: listener
         });
 
-        events.on(eventName, listener);
+        common.events.on(eventName, listener);
     }
 
     /**
@@ -447,7 +447,7 @@ class Resources {
                 return;
             }
 
-            events.removeListener(obj.eventName, obj.listener);
+            common.events.removeListener(obj.eventName, obj.listener);
         });
 
         this.listeners = [];

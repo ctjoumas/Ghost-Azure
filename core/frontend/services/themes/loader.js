@@ -1,9 +1,9 @@
-const debug = require('ghost-ignition').debug('themes:loader');
-const config = require('../../../shared/config');
-const packageJSON = require('../../../server/lib/fs/package-json');
-const themeList = require('./list');
-let loadAllThemes;
-let loadOneTheme;
+var debug = require('ghost-ignition').debug('themes:loader'),
+    config = require('../../../server/config'),
+    packageJSON = require('../../../server/lib/fs/package-json'),
+    themeList = require('./list'),
+    loadAllThemes,
+    loadOneTheme;
 
 loadAllThemes = function loadAllThemes() {
     return packageJSON.read

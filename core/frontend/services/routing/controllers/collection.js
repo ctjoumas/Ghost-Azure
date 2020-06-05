@@ -1,11 +1,10 @@
-const _ = require('lodash');
-const debug = require('ghost-ignition').debug('services:routing:controllers:collection');
-const {i18n} = require('../../../../server/lib/common');
-const errors = require('@tryghost/errors');
-const security = require('../../../../server/lib/security');
-const urlService = require('../../url');
-const themes = require('../../themes');
-const helpers = require('../helpers');
+const _ = require('lodash'),
+    debug = require('ghost-ignition').debug('services:routing:controllers:collection'),
+    common = require('../../../../server/lib/common'),
+    security = require('../../../../server/lib/security'),
+    urlService = require('../../url'),
+    themes = require('../../themes'),
+    helpers = require('../helpers');
 
 /**
  * @description Collection controller.
@@ -15,7 +14,7 @@ const helpers = require('../helpers');
  * @returns {Promise}
  */
 module.exports = function collectionController(req, res, next) {
-    debug('collectionController beging', req.params, res.routerOptions);
+    debug('collectionController', req.params, res.routerOptions);
 
     const pathOptions = {
         page: req.params.page !== undefined ? req.params.page : 1,
@@ -44,17 +43,16 @@ module.exports = function collectionController(req, res, next) {
         }
     }
 
-    debug('fetching data');
     return helpers.fetchData(pathOptions, res.routerOptions, res.locals)
         .then(function handleResult(result) {
             // CASE: requested page is greater than number of pages we have
             if (pathOptions.page > result.meta.pagination.pages) {
-                return next(new errors.NotFoundError({
-                    message: i18n.t('errors.errors.pageNotFound')
+                return next(new common.errors.NotFoundError({
+                    message: common.i18n.t('errors.errors.pageNotFound')
                 }));
             }
 
-            debug(`posts in collection ${result.posts.length}`);
+            debug(result.posts.length);
 
             /**
              * CASE:

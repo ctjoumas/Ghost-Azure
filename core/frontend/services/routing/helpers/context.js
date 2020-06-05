@@ -7,26 +7,27 @@
  *
  * Contexts are determined based on 3 pieces of information
  * 1. res.locals.relativeUrl - which never includes the subdirectory
- * 2. req.params.page - always has the page parameter, regardless of if the URL contains a keyword
+ * 2. req.params.page - always has the page parameter, regardless of if the URL contains a keyword (RSS pages don't)
  * 3. data - used for telling the difference between posts and pages
  */
-// @TODO: fix this!! These regexes are app specific and should be dynamic. They should not belong here....
-// routeKeywords.private: 'private'
-const privatePattern = new RegExp('^\\/private\\/');
-
-// routeKeywords.amp: 'amp'
-const ampPattern = new RegExp('\\/amp\\/$');
-
-const homePattern = new RegExp('^\\/$');
+const labs = require('../../../../server/services/labs'),
+    // @TODO: fix this!! These regexes are app specific and should be dynamic. They should not belong here....
+    // routeKeywords.private: 'private'
+    privatePattern = new RegExp('^\\/private\\/'),
+    // routeKeywords.subscribe: 'subscribe'
+    subscribePattern = new RegExp('^\\/subscribe\\/'),
+    // routeKeywords.amp: 'amp'
+    ampPattern = new RegExp('\\/amp\\/$'),
+    homePattern = new RegExp('^\\/$');
 
 function setResponseContext(req, res, data) {
-    const pageParam = req.params && req.params.page !== undefined ? parseInt(req.params.page, 10) : 1;
+    var pageParam = req.params && req.params.page !== undefined ? parseInt(req.params.page, 10) : 1;
 
     res.locals = res.locals || {};
     res.locals.context = [];
 
     // If we don't have a relativeUrl, we can't detect the context, so return
-    // See web/parent/middleware/ghost-locals
+    // See shared/middlewares/ghost-locals
     if (!res.locals.relativeUrl) {
         return;
     }
@@ -42,7 +43,7 @@ function setResponseContext(req, res, data) {
     }
 
     // Add context 'amp' to either post or page, if we have an `*/amp` route
-    if (ampPattern.test(res.locals.relativeUrl) && (data.post || data.page)) {
+    if (ampPattern.test(res.locals.relativeUrl) && data.post) {
         res.locals.context.push('amp');
     }
 
@@ -57,8 +58,13 @@ function setResponseContext(req, res, data) {
         }
     }
 
-    // @TODO: remove first if condition when only page key is returned
-    //        ref.: https://github.com/TryGhost/Ghost/issues/10042
+    if (subscribePattern.test(res.locals.relativeUrl) && labs.isSet('subscribers') === true) {
+        if (!res.locals.context.includes('subscribe')) {
+            res.locals.context.push('subscribe');
+        }
+    }
+
+    // @TODO: remove first if condition when we drop v0.1
     if (data && data.post && data.post.page) {
         if (!res.locals.context.includes('page')) {
             res.locals.context.push('page');

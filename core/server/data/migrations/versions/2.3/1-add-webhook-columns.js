@@ -1,4 +1,4 @@
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 const commands = require('../../../schema').commands;
 const table = 'webhooks';
 const newColumnNames = [
@@ -22,10 +22,10 @@ module.exports.up = (options) => {
         return connection.schema.hasColumn(table, newColumnName)
             .then((exists) => {
                 if (exists) {
-                    logging.warn(printResult('Adding', newColumnName));
+                    common.logging.warn(printResult('Adding', newColumnName));
                     return;
                 }
-                logging.info(printResult('Adding', newColumnName));
+                common.logging.info(printResult('Adding', newColumnName));
                 return commands.addColumn(table, newColumnName, connection);
             });
     });
@@ -37,10 +37,10 @@ module.exports.down = (options) => {
         return connection.schema.hasColumn(table, newColumnName)
             .then((exists) => {
                 if (!exists) {
-                    logging.warn(printResult('Dropping', newColumnName));
+                    common.logging.warn(printResult('Dropping', newColumnName));
                     return;
                 }
-                logging.info(printResult('Dropping', newColumnName));
+                common.logging.info(printResult('Dropping', newColumnName));
                 return commands.dropColumn(table, newColumnName, connection);
             });
     });

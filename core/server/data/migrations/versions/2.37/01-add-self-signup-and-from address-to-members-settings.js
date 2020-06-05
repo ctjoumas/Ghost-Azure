@@ -1,6 +1,6 @@
 const _ = require('lodash');
 const Promise = require('bluebird');
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 
 module.exports.config = {
     transaction: true
@@ -15,7 +15,7 @@ module.exports.up = (options) => {
         .transacting('settings')
         .then((response) => {
             if (!response) {
-                logging.warn('Cannot find settings.');
+                common.logging.warn('Cannot find settings.');
                 return;
             }
             let subscriptionSettingsEntry = response.find((entry) => {
@@ -23,7 +23,7 @@ module.exports.up = (options) => {
             });
 
             if (!subscriptionSettingsEntry) {
-                logging.warn('Cannot find members subscription settings.');
+                common.logging.warn('Cannot find members subscription settings.');
                 return;
             }
             let subscriptionSettings = JSON.parse(subscriptionSettingsEntry.value);
@@ -42,10 +42,10 @@ module.exports.up = (options) => {
             
             if (hasRequirePaymentProperty) {
                 if (!hasSelfSignupProperty) {
-                    logging.info(`Adding allowSelfSignup property from requirePaymentForSignup in member settings`);
+                    common.logging.info(`Adding allowSelfSignup property from requirePaymentForSignup in member settings`);
                     subscriptionSettings.allowSelfSignup = !subscriptionSettings.requirePaymentForSignup;
                 }
-                logging.info(`Removing requirePaymentForSignup property in member settings`);
+                common.logging.info(`Removing requirePaymentForSignup property in member settings`);
                 delete subscriptionSettings.requirePaymentForSignup;
             }
 

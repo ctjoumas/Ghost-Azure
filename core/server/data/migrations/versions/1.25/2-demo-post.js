@@ -1,5 +1,5 @@
 const _ = require('lodash');
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 const models = require('../../../../models');
 const fixtures = require('../../../../data/schema/fixtures');
 const message1 = 'Adding demo post.';
@@ -18,14 +18,14 @@ module.exports.up = (options) => {
 
     let userId;
 
-    logging.info(message1);
+    common.logging.info(message1);
 
     const demoPost = _.cloneDeep(fixtures.models[5].entries[0]);
 
     return models.Post.findOne({slug: demoPost.slug, status: 'all'}, localOptions)
         .then((model) => {
             if (model) {
-                logging.warn(message3);
+                common.logging.warn(message3);
                 return;
             }
 
@@ -49,7 +49,7 @@ module.exports.up = (options) => {
                     return models.Post.add(demoPost, localOptions);
                 })
                 .then(() => {
-                    logging.info(message2);
+                    common.logging.info(message2);
                 });
         });
 };

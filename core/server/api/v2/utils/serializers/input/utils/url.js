@@ -1,4 +1,4 @@
-const urlUtils = require('../../../../../../../shared/url-utils');
+const urlUtils = require('../../../../../../lib/url-utils');
 
 const handleImageUrl = (imageUrl) => {
     const siteDomain = urlUtils.getSiteUrl().replace(/^http(s?):\/\//, '').replace(/\/$/, '');

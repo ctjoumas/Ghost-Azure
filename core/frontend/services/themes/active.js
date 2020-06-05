@@ -11,16 +11,14 @@
  * No properties marked with an _ should be used directly.
  *
  */
-const join = require('path').join;
-
-const _ = require('lodash');
-const themeConfig = require('./config');
-const themeEngines = require('./engines');
-const config = require('../../../shared/config');
-const engine = require('./engine');
-
-// Current instance of ActiveTheme
-let currentActiveTheme;
+var join = require('path').join,
+    _ = require('lodash'),
+    themeConfig = require('./config'),
+    themeEngines = require('./engines'),
+    config = require('../../../server/config'),
+    engine = require('./engine'),
+    // Current instance of ActiveTheme
+    currentActiveTheme;
 
 class ActiveTheme {
     /**

@@ -1,25 +1,18 @@
-const _ = require('lodash');
-const {i18n} = require('../../../../../lib/common');
-const errors = require('@tryghost/errors');
+const common = require('../../../../../lib/common');
 const debug = require('ghost-ignition').debug('api:canary:utils:serializers:output:members');
-const mapper = require('./utils/mapper');
-const {formatCSV} = require('../../../../../lib/fs');
 
 module.exports = {
     browse(data, apiConfig, frame) {
         debug('browse');
 
-        frame.response = {
-            members: data.members.map(member => mapper.mapMember(member, frame)),
-            meta: data.meta
-        };
+        frame.response = data;
     },
 
     add(data, apiConfig, frame) {
         debug('add');
 
         frame.response = {
-            members: [mapper.mapMember(data, frame)]
+            members: [data]
         };
     },
 
@@ -27,7 +20,7 @@ module.exports = {
         debug('edit');
 
         frame.response = {
-            members: [mapper.mapMember(data, frame)]
+            members: [data]
         };
     },
 
@@ -35,68 +28,50 @@ module.exports = {
         debug('read');
 
         if (!data) {
-            return Promise.reject(new errors.NotFoundError({
-                message: i18n.t('errors.api.members.memberNotFound')
+            return Promise.reject(new common.errors.NotFoundError({
+                message: common.i18n.t('errors.api.members.memberNotFound')
             }));
         }
 
         frame.response = {
-            members: [mapper.mapMember(data, frame)]
+            members: [data]
         };
     },
 
     exportCSV(models, apiConfig, frame) {
         debug('exportCSV');
 
-        const fields = [
-            'id',
-            'email',
-            'name',
-            'note',
-            'subscribed_to_emails',
-            'complimentary_plan',
-            'stripe_customer_id',
-            'created_at',
-            'deleted_at',
-            'labels'
-        ];
+        const fields = ['id', 'email', 'name', 'note', 'created_at', 'deleted_at'];
 
-        const members = models.members.map((member) => {
-            member = mapper.mapMember(member, frame);
-            let stripeCustomerId;
+        function formatCSV(data) {
+            let csv = `${fields.join(',')}\r\n`,
+                entry,
+                field,
+                j,
+                i;
 
-            if (member.stripe) {
-                stripeCustomerId = _.get(member, 'stripe.subscriptions[0].customer.id');
-            }
-            let labels = [];
-            if (member.labels) {
-                labels = `"${member.labels.map(l => l.name).join(',')}"`;
+            for (j = 0; j < data.length; j = j + 1) {
+                entry = data[j];
+
+                for (i = 0; i < fields.length; i = i + 1) {
+                    field = fields[i];
+                    csv += entry[field] !== null ? entry[field] : '';
+                    if (i !== fields.length - 1) {
+                        csv += ',';
+                    }
+                }
+                csv += '\r\n';
             }
 
-            return {
-                id: member.id,
-                email: member.email,
-                name: member.name,
-                note: member.note,
-                subscribed_to_emails: member.subscribed,
-                complimentary_plan: member.comped,
-                stripe_customer_id: stripeCustomerId,
-                created_at: JSON.stringify(member.created_at),
-                deleted_at: JSON.stringify(member.deleted_at),
-                labels: labels
-            };
-        });
+            return csv;
+        }
 
-        frame.response = formatCSV(members, fields);
+        frame.response = formatCSV(models.members);
     },
 
     importCSV(data, apiConfig, frame) {
         debug('importCSV');
-        frame.response = data;
-    },
 
-    stats(data, apiConfig, frame) {
-        debug('stats');
         frame.response = data;
     }
 };

@@ -1,8 +1,8 @@
-const _ = require('lodash');
-const themeList = require('./list');
-const active = require('./active');
-const packageJSON = require('../../../server/lib/fs/package-json');
-const settingsCache = require('../../../server/services/settings/cache');
+var _ = require('lodash'),
+    themeList = require('./list'),
+    active = require('./active'),
+    packageJSON = require('../../../server/lib/fs/package-json'),
+    settingsCache = require('../../../server/services/settings/cache');
 
 /**
  *
@@ -17,8 +17,7 @@ const settingsCache = require('../../../server/services/settings/cache');
  * @return {*}
  */
 module.exports = function toJSON(name, checkedTheme) {
-    let themeResult;
-    let toFilter;
+    var themeResult, toFilter;
 
     if (!name) {
         toFilter = themeList.getAll();

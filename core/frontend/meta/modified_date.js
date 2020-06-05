@@ -1,8 +1,8 @@
-const _ = require('lodash');
+var _ = require('lodash');
 
 function getModifiedDate(data) {
-    let context = data.context ? data.context : null;
-    let modDate;
+    var context = data.context ? data.context : null,
+        modDate;
 
     context = _.includes(context, 'amp') ? 'post' : context;
 

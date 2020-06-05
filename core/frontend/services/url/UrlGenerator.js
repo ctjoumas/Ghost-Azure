@@ -1,30 +1,27 @@
-const _ = require('lodash');
-const nql = require('@nexes/nql');
-const debug = require('ghost-ignition').debug('services:url:generator');
-const localUtils = require('../../../shared/url-utils');
-
-// @TODO: merge with filter plugin
-const EXPANSIONS = [{
-    key: 'author',
-    replacement: 'authors.slug'
-}, {
-    key: 'tags',
-    replacement: 'tags.slug'
-}, {
-    key: 'tag',
-    replacement: 'tags.slug'
-}, {
-    key: 'authors',
-    replacement: 'authors.slug'
-}, {
-    key: 'primary_tag',
-    replacement: 'primary_tag.slug'
-}, {
-    key: 'primary_author',
-    replacement: 'primary_author.slug'
-}];
-
-const mapNQLKeyValues = require('../../../shared/nql-map-key-values');
+const _ = require('lodash'),
+    nql = require('@nexes/nql'),
+    debug = require('ghost-ignition').debug('services:url:generator'),
+    localUtils = require('../../../server/lib/url-utils'),
+    // @TODO: merge with filter plugin
+    EXPANSIONS = [{
+        key: 'author',
+        replacement: 'authors.slug'
+    }, {
+        key: 'tags',
+        replacement: 'tags.slug'
+    }, {
+        key: 'tag',
+        replacement: 'tags.slug'
+    }, {
+        key: 'authors',
+        replacement: 'authors.slug'
+    }, {
+        key: 'primary_tag',
+        replacement: 'primary_tag.slug'
+    }, {
+        key: 'primary_author',
+        replacement: 'primary_author.slug'
+    }];
 
 /**
  * The UrlGenerator class is responsible to generate urls based on a router's conditions.
@@ -47,22 +44,7 @@ class UrlGenerator {
         // CASE: routers can define custom filters, but not required.
         if (this.router.getFilter()) {
             this.filter = this.router.getFilter();
-            this.nql = nql(this.filter, {
-                expansions: EXPANSIONS,
-                transformer: mapNQLKeyValues({
-                    key: {
-                        from: 'page',
-                        to: 'type'
-                    },
-                    values: [{
-                        from: false,
-                        to: 'post'
-                    }, {
-                        from: true,
-                        to: 'page'
-                    }]
-                })
-            });
+            this.nql = nql(this.filter, {expansions: EXPANSIONS});
             debug('filter', this.filter);
         }
 

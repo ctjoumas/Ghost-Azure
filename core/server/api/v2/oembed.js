@@ -1,10 +1,10 @@
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
+const common = require('../../lib/common');
 const {extract, hasProvider} = require('oembed-parser');
 const Promise = require('bluebird');
 const externalRequest = require('../../lib/request-external');
 const cheerio = require('cheerio');
 const _ = require('lodash');
+const {URL} = require('url');
 
 const findUrlWithProvider = (url) => {
     let provider;
@@ -31,15 +31,15 @@ const findUrlWithProvider = (url) => {
 };
 
 function unknownProvider(url) {
-    return Promise.reject(new errors.ValidationError({
-        message: i18n.t('errors.api.oembed.unknownProvider'),
+    return Promise.reject(new common.errors.ValidationError({
+        message: common.i18n.t('errors.api.oembed.unknownProvider'),
         context: url
     }));
 }
 
 function knownProvider(url) {
-    return extract(url, {maxwith: 1280}).catch((err) => {
-        return Promise.reject(new errors.InternalServerError({
+    return extract(url).catch((err) => {
+        return Promise.reject(new common.errors.InternalServerError({
             message: err.message
         }));
     });
@@ -51,7 +51,7 @@ function isIpOrLocalhost(url) {
         const IPV6_REGEX = /:/; // fqdns will not have colons
         const HTTP_REGEX = /^https?:/i;
 
-        const {protocol, hostname} = new URL(url);
+        let {protocol, hostname} = new URL(url);
 
         if (!HTTP_REGEX.test(protocol) || hostname === 'localhost' || IPV4_REGEX.test(hostname) || IPV6_REGEX.test(hostname)) {
             return true;
@@ -82,7 +82,10 @@ function fetchOembedData(_url) {
     return externalRequest(url, {
         method: 'GET',
         timeout: 2 * 1000,
-        followRedirect: true
+        followRedirect: true,
+        headers: {
+            'user-agent': 'Ghost(https://github.com/TryGhost/Ghost)'
+        }
     }).then((response) => {
         // url changed after fetch, see if we were redirected to a known oembed
         if (response.url !== url) {
@@ -111,7 +114,9 @@ function fetchOembedData(_url) {
                 method: 'GET',
                 json: true,
                 timeout: 2 * 1000,
-                followRedirect: true
+                headers: {
+                    'user-agent': 'Ghost(https://github.com/TryGhost/Ghost)'
+                }
             }).then((response) => {
                 // validate the fetched json against the oembed spec to avoid
                 // leaking non-oembed responses

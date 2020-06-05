@@ -1,6 +1,5 @@
 const models = require('../../models');
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
+const common = require('../../lib/common');
 
 module.exports = {
     docName: 'webhooks',
@@ -29,7 +28,7 @@ module.exports = {
             ).then((webhook) => {
                 if (webhook) {
                     return Promise.reject(
-                        new errors.ValidationError({message: i18n.t('errors.api.webhooks.webhookAlreadyExists')})
+                        new common.errors.ValidationError({message: common.i18n.t('errors.api.webhooks.webhookAlreadyExists')})
                     );
                 }
 
@@ -60,8 +59,8 @@ module.exports = {
         query({data, options}) {
             return models.Webhook.edit(data.webhooks[0], Object.assign(options, {require: true}))
                 .catch(models.Webhook.NotFoundError, () => {
-                    throw new errors.NotFoundError({
-                        message: i18n.t('errors.api.resource.resourceNotFound', {
+                    throw new common.errors.NotFoundError({
+                        message: common.i18n.t('errors.api.resource.resourceNotFound', {
                             resource: 'Webhook'
                         })
                     });
@@ -85,16 +84,7 @@ module.exports = {
         permissions: true,
         query(frame) {
             frame.options.require = true;
-
-            return models.Webhook.destroy(frame.options)
-                .then(() => null)
-                .catch(models.Webhook.NotFoundError, () => {
-                    return Promise.reject(new errors.NotFoundError({
-                        message: i18n.t('errors.api.resource.resourceNotFound', {
-                            resource: 'Webhook'
-                        })
-                    }));
-                });
+            return models.Webhook.destroy(frame.options).return(null);
         }
     }
 };

@@ -1,5 +1,4 @@
-const errors = require('@tryghost/errors');
-const {i18n} = require('../../lib/common');
+const common = require('../../lib/common');
 const models = require('../../models');
 const security = require('../../lib/security');
 
@@ -11,11 +10,11 @@ async function accept(invitation) {
     let invite = await models.Invite.findOne({token: inviteToken, status: 'sent'}, options);
 
     if (!invite) {
-        throw new errors.NotFoundError({message: i18n.t('errors.api.invites.inviteNotFound')});
+        throw new common.errors.NotFoundError({message: common.i18n.t('errors.api.invites.inviteNotFound')});
     }
 
     if (invite.get('expires') < Date.now()) {
-        throw new errors.NotFoundError({message: i18n.t('errors.api.invites.inviteExpired')});
+        throw new common.errors.NotFoundError({message: common.i18n.t('errors.api.invites.inviteExpired')});
     }
 
     await models.User.add({

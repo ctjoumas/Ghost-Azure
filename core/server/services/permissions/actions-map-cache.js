@@ -1,14 +1,13 @@
 // Based heavily on the settings cache
-const _ = require('lodash');
-
-let actionsMap = {};
+var _ = require('lodash'),
+    actionsMap = {};
 
 module.exports = {
     getAll: function getAll() {
         return _.cloneDeep(actionsMap);
     },
     init: function init(perms) {
-        const seenActions = {};
+        var seenActions = {};
 
         actionsMap = {};
 
@@ -21,8 +20,8 @@ module.exports = {
          }
          */
         _.each(perms.models, function (perm) {
-            const actionType = perm.get('action_type');
-            const objectType = perm.get('object_type');
+            var actionType = perm.get('action_type'),
+                objectType = perm.get('object_type');
 
             actionsMap[actionType] = actionsMap[actionType] || [];
             seenActions[actionType] = seenActions[actionType] || {};

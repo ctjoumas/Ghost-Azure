@@ -1,4 +1,4 @@
-const logging = require('../../../../../shared/logging');
+const logging = require('../../../../lib/common/logging');
 const models = require('../../../../models');
 const utils = require('../../../schema/fixtures/utils');
 

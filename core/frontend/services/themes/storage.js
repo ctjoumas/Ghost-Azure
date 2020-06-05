@@ -8,9 +8,7 @@ const themeLoader = require('./loader');
 const toJSON = require('./to-json');
 
 const settingsCache = require('../../../server/services/settings/cache');
-const {i18n} = require('../../../server/lib/common');
-const logging = require('../../../shared/logging');
-const errors = require('@tryghost/errors');
+const common = require('../../../server/lib/common');
 const debug = require('ghost-ignition').debug('api:themes');
 
 let themeStorage;
@@ -26,8 +24,8 @@ module.exports = {
         const theme = list.get(themeName);
 
         if (!theme) {
-            return Promise.reject(new errors.BadRequestError({
-                message: i18n.t('errors.api.themes.invalidThemeName')
+            return Promise.reject(new common.errors.BadRequestError({
+                message: common.i18n.t('errors.api.themes.invalidThemeName')
             }));
         }
 
@@ -40,8 +38,8 @@ module.exports = {
 
         // check if zip name is casper.zip
         if (zip.name === 'casper.zip') {
-            throw new errors.ValidationError({
-                message: i18n.t('errors.api.themes.overrideCasper')
+            throw new common.errors.ValidationError({
+                message: common.i18n.t('errors.api.themes.overrideCasper')
             });
         }
 
@@ -91,29 +89,29 @@ module.exports = {
                 if (checkedTheme) {
                     fs.remove(checkedTheme.path)
                         .catch((err) => {
-                            logging.error(new errors.GhostError({err: err}));
+                            common.logging.error(new common.errors.GhostError({err: err}));
                         });
                 }
             });
     },
     destroy: function (themeName) {
         if (themeName === 'casper') {
-            throw new errors.ValidationError({
-                message: i18n.t('errors.api.themes.destroyCasper')
+            throw new common.errors.ValidationError({
+                message: common.i18n.t('errors.api.themes.destroyCasper')
             });
         }
 
         if (themeName === settingsCache.get('active_theme')) {
-            throw new errors.ValidationError({
-                message: i18n.t('errors.api.themes.destroyActive')
+            throw new common.errors.ValidationError({
+                message: common.i18n.t('errors.api.themes.destroyActive')
             });
         }
 
         const theme = list.get(themeName);
 
         if (!theme) {
-            throw new errors.NotFoundError({
-                message: i18n.t('errors.api.themes.themeDoesNotExist')
+            throw new common.errors.NotFoundError({
+                message: common.i18n.t('errors.api.themes.themeDoesNotExist')
             });
         }
 

@@ -1,4 +1,4 @@
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 const commands = require('../../../schema').commands;
 const table = 'members';
 const message1 = 'Adding table: ' + table;
@@ -10,11 +10,11 @@ module.exports.up = (options) => {
     return connection.schema.hasTable(table)
         .then(function (exists) {
             if (exists) {
-                logging.warn(message1);
+                common.logging.warn(message1);
                 return;
             }
 
-            logging.info(message1);
+            common.logging.info(message1);
             return commands.createTable(table, connection);
         });
 };
@@ -25,11 +25,11 @@ module.exports.down = (options) => {
     return connection.schema.hasTable(table)
         .then(function (exists) {
             if (!exists) {
-                logging.warn(message2);
+                common.logging.warn(message2);
                 return;
             }
 
-            logging.info(message2);
+            common.logging.info(message2);
             return commands.deleteTable(table, connection);
         });
 };
