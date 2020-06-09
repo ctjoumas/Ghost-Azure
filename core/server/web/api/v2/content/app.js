@@ -1,13 +1,13 @@
 const debug = require('ghost-ignition').debug('web:api:v2:content:app');
 const boolParser = require('express-query-boolean');
 const bodyParser = require('body-parser');
-const express = require('express');
+const express = require('../../../../../shared/express');
 const shared = require('../../../shared');
 const routes = require('./routes');
 
 module.exports = function setupApiApp() {
     debug('Content API v2 setup start');
-    const apiApp = express();
+    const apiApp = express('v2 content');
 
     // API middleware
 

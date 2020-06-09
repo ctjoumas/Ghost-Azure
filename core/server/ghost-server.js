@@ -1,14 +1,17 @@
 // # Ghost Server
 // Handles the creation of an HTTP Server for Ghost
-var debug = require('ghost-ignition').debug('server'),
-    Promise = require('bluebird'),
-    fs = require('fs-extra'),
-    path = require('path'),
-    _ = require('lodash'),
-    config = require('./config'),
-    urlUtils = require('./lib/url-utils'),
-    common = require('./lib/common'),
-    moment = require('moment');
+const debug = require('ghost-ignition').debug('server');
+
+const Promise = require('bluebird');
+const fs = require('fs-extra');
+const path = require('path');
+const _ = require('lodash');
+const config = require('../shared/config');
+const urlUtils = require('./../shared/url-utils');
+const errors = require('@tryghost/errors');
+const {events, i18n} = require('./lib/common');
+const logging = require('../shared/logging');
+const moment = require('moment');
 
 /**
  * ## GhostServer
@@ -25,6 +28,13 @@ function GhostServer(rootApp) {
     this.config = config;
 }
 
+const debugInfo = {
+    versions: process.versions,
+    platform: process.platform,
+    arch: process.arch,
+    release: process.release
+};
+
 /**
  * ## Public API methods
  *
@@ -37,12 +47,14 @@ function GhostServer(rootApp) {
  */
 GhostServer.prototype.start = function (externalApp) {
     debug('Starting...');
-    var self = this,
-        rootApp = externalApp ? externalApp : self.rootApp,
-        socketConfig, socketValues = {
-            path: path.join(config.get('paths').contentPath, config.get('env') + '.socket'),
-            permissions: '660'
-        };
+    const self = this;
+    const rootApp = externalApp ? externalApp : self.rootApp;
+    let socketConfig;
+
+    const socketValues = {
+        path: path.join(config.get('paths').contentPath, config.get('env') + '.socket'),
+        permissions: '660'
+    };
 
     return new Promise(function (resolve, reject) {
         if (Object.prototype.hasOwnProperty.call(config.get('server'), 'socket')) {
@@ -73,19 +85,19 @@ GhostServer.prototype.start = function (externalApp) {
         }
 
         self.httpServer.on('error', function (error) {
-            var ghostError;
+            let ghostError;
 
             if (error.errno === 'EADDRINUSE') {
-                ghostError = new common.errors.GhostError({
-                    message: common.i18n.t('errors.httpServer.addressInUse.error'),
-                    context: common.i18n.t('errors.httpServer.addressInUse.context', {port: config.get('server').port}),
-                    help: common.i18n.t('errors.httpServer.addressInUse.help')
+                ghostError = new errors.GhostError({
+                    message: i18n.t('errors.httpServer.addressInUse.error'),
+                    context: i18n.t('errors.httpServer.addressInUse.context', {port: config.get('server').port}),
+                    help: i18n.t('errors.httpServer.addressInUse.help')
                 });
             } else {
-                ghostError = new common.errors.GhostError({
-                    message: common.i18n.t('errors.httpServer.otherError.error', {errorNumber: error.errno}),
-                    context: common.i18n.t('errors.httpServer.otherError.context'),
-                    help: common.i18n.t('errors.httpServer.otherError.help')
+                ghostError = new errors.GhostError({
+                    message: i18n.t('errors.httpServer.otherError.error', {errorNumber: error.errno}),
+                    context: i18n.t('errors.httpServer.otherError.context'),
+                    help: i18n.t('errors.httpServer.otherError.help')
                 });
             }
 
@@ -111,14 +123,14 @@ GhostServer.prototype.start = function (externalApp) {
  * @returns {Promise} Resolves once Ghost has stopped
  */
 GhostServer.prototype.stop = function () {
-    var self = this;
+    const self = this;
 
     return new Promise(function (resolve) {
         if (self.httpServer === null) {
             resolve(self);
         } else {
             self.httpServer.close(function () {
-                common.events.emit('server.stop');
+                events.emit('server.stop');
                 self.httpServer = null;
                 self.logShutdownMessages();
                 resolve(self);
@@ -145,7 +157,7 @@ GhostServer.prototype.restart = function () {
  * To be called after `stop`
  */
 GhostServer.prototype.hammertime = function () {
-    common.logging.info(common.i18n.t('notices.httpServer.cantTouchThis'));
+    logging.info(i18n.t('notices.httpServer.cantTouchThis'));
 
     return Promise.resolve(this);
 };
@@ -157,7 +169,7 @@ GhostServer.prototype.hammertime = function () {
  * @param {Object} socket
  */
 GhostServer.prototype.connection = function (socket) {
-    var self = this;
+    const self = this;
 
     self.connectionId += 1;
     socket._ghostId = self.connectionId;
@@ -175,10 +187,10 @@ GhostServer.prototype.connection = function (socket) {
  * httpServer from returning. We need to destroy all connections manually.
  */
 GhostServer.prototype.closeConnections = function () {
-    var self = this;
+    const self = this;
 
     Object.keys(self.connections).forEach(function (socketId) {
-        var socket = self.connections[socketId];
+        const socket = self.connections[socketId];
 
         if (socket) {
             socket.destroy();
@@ -192,27 +204,27 @@ GhostServer.prototype.closeConnections = function () {
 GhostServer.prototype.logStartMessages = function () {
     // Startup & Shutdown messages
     if (config.get('env') === 'production') {
-        common.logging.info(common.i18n.t('notices.httpServer.ghostIsRunningIn', {env: config.get('env')}));
-        common.logging.info(common.i18n.t('notices.httpServer.yourBlogIsAvailableOn', {url: urlUtils.urlFor('home', true)}));
-        common.logging.info(common.i18n.t('notices.httpServer.ctrlCToShutDown'));
+        logging.info(i18n.t('notices.httpServer.ghostIsRunningIn', {env: config.get('env')}));
+        logging.info(i18n.t('notices.httpServer.yourBlogIsAvailableOn', {url: urlUtils.urlFor('home', true)}));
+        logging.info(i18n.t('notices.httpServer.ctrlCToShutDown'));
     } else {
-        common.logging.info(common.i18n.t('notices.httpServer.ghostIsRunningIn', {env: config.get('env')}));
-        common.logging.info(common.i18n.t('notices.httpServer.listeningOn', {
+        logging.info(i18n.t('notices.httpServer.ghostIsRunningIn', {env: config.get('env')}));
+        logging.info(i18n.t('notices.httpServer.listeningOn', {
             host: config.get('server').socket || config.get('server').host,
             port: config.get('server').port
         }));
-        common.logging.info(common.i18n.t('notices.httpServer.urlConfiguredAs', {url: urlUtils.urlFor('home', true)}));
-        common.logging.info(common.i18n.t('notices.httpServer.ctrlCToShutDown'));
+        logging.info(i18n.t('notices.httpServer.urlConfiguredAs', {url: urlUtils.urlFor('home', true)}));
+        logging.info(i18n.t('notices.httpServer.ctrlCToShutDown'));
     }
 
     function shutdown() {
-        common.logging.warn(common.i18n.t('notices.httpServer.ghostHasShutdown'));
+        logging.warn(i18n.t('notices.httpServer.ghostHasShutdown'));
 
         if (config.get('env') === 'production') {
-            common.logging.warn(common.i18n.t('notices.httpServer.yourBlogIsNowOffline'));
+            logging.warn(i18n.t('notices.httpServer.yourBlogIsNowOffline'));
         } else {
-            common.logging.warn(
-                common.i18n.t('notices.httpServer.ghostWasRunningFor'),
+            logging.warn(
+                i18n.t('notices.httpServer.ghostWasRunningFor'),
                 moment.duration(process.uptime(), 'seconds').humanize()
             );
         }
@@ -228,7 +240,7 @@ GhostServer.prototype.logStartMessages = function () {
  * ### Log Shutdown Messages
  */
 GhostServer.prototype.logShutdownMessages = function () {
-    common.logging.warn(common.i18n.t('notices.httpServer.ghostIsClosingConnections'));
+    logging.warn(i18n.t('notices.httpServer.ghostIsClosingConnections'));
 };
 
 module.exports = GhostServer;
@@ -243,7 +255,7 @@ const connectToBootstrapSocket = (message) => {
             let wasResolved = false;
 
             const waitTimeout = setTimeout(() => {
-                common.logging.info('Bootstrap socket timed out.');
+                logging.info('Bootstrap socket timed out.');
 
                 if (!client.destroyed) {
                     client.destroy();
@@ -273,7 +285,7 @@ const connectToBootstrapSocket = (message) => {
             });
 
             client.on('close', () => {
-                common.logging.info('Bootstrap client was closed.');
+                logging.info('Bootstrap client was closed.');
 
                 if (waitTimeout) {
                     clearTimeout(waitTimeout);
@@ -281,7 +293,7 @@ const connectToBootstrapSocket = (message) => {
             });
 
             client.on('error', (err) => {
-                common.logging.warn(`Can't connect to the bootstrap socket (${socketAddress.host} ${socketAddress.port}) ${err.code}`);
+                logging.warn(`Can't connect to the bootstrap socket (${socketAddress.host} ${socketAddress.port}) ${err.code}`);
 
                 client.removeAllListeners();
 
@@ -290,10 +302,10 @@ const connectToBootstrapSocket = (message) => {
                 }
 
                 if (options.tries < 3) {
-                    common.logging.warn(`Tries: ${options.tries}`);
+                    logging.warn(`Tries: ${options.tries}`);
 
                     // retry
-                    common.logging.warn('Retrying...');
+                    logging.warn('Retrying...');
 
                     options.tries = options.tries + 1;
                     const retryTimeout = setTimeout(() => {
@@ -328,12 +340,13 @@ module.exports.announceServerStart = function announceServerStart() {
     }
     announceServerStartCalled = true;
 
-    common.events.emit('server.start');
+    events.emit('server.start');
 
     // CASE: IPC communication to the CLI via child process.
     if (process.send) {
         process.send({
-            started: true
+            started: true,
+            debug: debugInfo
         });
     }
 
@@ -364,7 +377,8 @@ module.exports.announceServerStopped = function announceServerStopped(error) {
     if (process.send) {
         process.send({
             started: false,
-            error: error
+            error: error,
+            debug: debugInfo
         });
     }
 
@@ -372,7 +386,8 @@ module.exports.announceServerStopped = function announceServerStopped(error) {
     if (config.get('bootstrap-socket')) {
         return connectToBootstrapSocket({
             started: false,
-            error: error
+            error: error,
+            debug: debugInfo
         });
     }
 

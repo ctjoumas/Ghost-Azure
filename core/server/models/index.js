@@ -2,9 +2,7 @@
  * Dependencies
  */
 
-var _ = require('lodash'),
-    exports,
-    models;
+const _ = require('lodash');
 
 // enable event listeners
 require('./base/listeners');
@@ -14,20 +12,12 @@ require('./base/listeners');
  */
 exports = module.exports;
 
-models = [
-    'accesstoken',
-    'app-field',
-    'app-setting',
-    'app',
-    'client-trusted-domain',
-    'client',
+const models = [
     'permission',
     'post',
-    'refreshtoken',
     'role',
     'settings',
     'session',
-    'subscriber',
     'tag',
     'tag-public',
     'user',
@@ -38,9 +28,12 @@ models = [
     'api-key',
     'mobiledoc-revision',
     'member',
+    'action',
+    'posts-meta',
     'member-stripe-customer',
     'stripe-customer-subscription',
-    'action'
+    'email',
+    'label'
 ];
 
 function init() {

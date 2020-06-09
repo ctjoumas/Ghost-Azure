@@ -1,8 +1,9 @@
 const _ = require('lodash');
 const Promise = require('bluebird');
 const fs = require('fs-extra');
-const config = require('../../../server/config');
-const common = require('../../../server/lib/common');
+const config = require('../../../shared/config');
+const {i18n} = require('../../../server/lib/common');
+const errors = require('@tryghost/errors');
 
 const canActivate = function canActivate(checkedTheme) {
     // CASE: production and no fatal errors
@@ -18,11 +19,11 @@ const check = function check(theme, isZip) {
     if (isZip) {
         checkPromise = gscan.checkZip(theme, {
             keepExtractedDir: true,
-            checkVersion: 'v2'
+            checkVersion: 'canary'
         });
     } else {
         checkPromise = gscan.check(theme.path, {
-            checkVersion: 'v2'
+            checkVersion: 'canary'
         });
     }
 
@@ -30,7 +31,7 @@ const check = function check(theme, isZip) {
         .then(function resultHandler(checkedTheme) {
             checkedTheme = gscan.format(checkedTheme, {
                 onlyFatalErrors: config.get('env') === 'production',
-                checkVersion: 'v2'
+                checkVersion: 'canary'
             });
 
             return checkedTheme;
@@ -54,8 +55,8 @@ const checkSafe = function checkSafe(theme, isZip) {
                 fs.remove(checkedTheme.path);
             }
 
-            return Promise.reject(new common.errors.ThemeValidationError({
-                message: common.i18n.t('errors.api.themes.invalidTheme'),
+            return Promise.reject(new errors.ThemeValidationError({
+                message: i18n.t('errors.api.themes.invalidTheme'),
                 errorDetails: Object.assign(
                     _.pick(checkedTheme, ['checkedVersion', 'name', 'path', 'version']), {
                         errors: checkedTheme.results.error

@@ -1,7 +1,8 @@
-const debug = require('ghost-ignition').debug('services:routing:controllers:preview'),
-    urlService = require('../../url'),
-    urlUtils = require('../../../../server/lib/url-utils'),
-    helpers = require('../helpers');
+const debug = require('ghost-ignition').debug('services:routing:controllers:preview');
+const config = require('../../../../shared/config');
+const urlService = require('../../url');
+const urlUtils = require('../../../../shared/url-utils');
+const helpers = require('../helpers');
 
 /**
  * @description Preview Controller.
@@ -18,8 +19,7 @@ module.exports = function previewController(req, res, next) {
     const params = {
         uuid: req.params.uuid,
         status: 'all',
-        // @TODO: Remove "author" if we drop v0.1
-        include: 'author,authors,tags'
+        include: 'authors,tags'
     };
 
     return api[res.routerOptions.query.controller]
@@ -32,13 +32,18 @@ module.exports = function previewController(req, res, next) {
             }
 
             if (req.params.options && req.params.options.toLowerCase() === 'edit') {
+                // CASE: last param of the url is /edit but admin redirects are disabled
+                if (!config.get('admin:redirects')) {
+                    return next();
+                }
+
                 // @TODO: we don't know which resource type it is, because it's a generic preview handler and the
                 //        preview API returns {previews: []}
                 // @TODO: figure out how to solve better
                 const resourceType = post.page ? 'page' : 'post';
 
                 // CASE: last param of the url is /edit, redirect to admin
-                return urlUtils.redirectToAdmin(302, res, `/editor/${resourceType}/${post.id}`);
+                return urlUtils.redirectToAdmin(302, res, `/#/editor/${resourceType}/${post.id}`);
             } else if (req.params.options) {
                 // CASE: unknown options param detected, ignore
                 return next();
@@ -46,6 +51,10 @@ module.exports = function previewController(req, res, next) {
 
             if (post.status === 'published') {
                 return urlUtils.redirect301(res, urlService.getUrlByResourceId(post.id, {withSubdirectory: true}));
+            }
+
+            if (res.locals.apiVersion !== 'v0.1' && res.locals.apiVersion !== 'v2') {
+                post.access = !!post.html;
             }
 
             // @TODO: See helpers/secure

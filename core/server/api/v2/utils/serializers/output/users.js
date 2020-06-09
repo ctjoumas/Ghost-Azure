@@ -1,5 +1,5 @@
 const debug = require('ghost-ignition').debug('api:v2:utils:serializers:output:users');
-const common = require('../../../../../lib/common');
+const {i18n} = require('../../../../../lib/common');
 const mapper = require('./utils/mapper');
 
 module.exports = {
@@ -10,8 +10,6 @@ module.exports = {
             users: models.data.map(model => mapper.mapUser(model, frame)),
             meta: models.meta
         };
-
-        debug(frame.response);
     },
 
     read(model, apiConfig, frame) {
@@ -20,8 +18,6 @@ module.exports = {
         frame.response = {
             users: [mapper.mapUser(model, frame)]
         };
-
-        debug(frame.response);
     },
 
     edit() {
@@ -33,7 +29,7 @@ module.exports = {
         debug('changePassword');
 
         frame.response = {
-            password: [{message: common.i18n.t('notices.api.users.pwdChangedSuccessfully')}]
+            password: [{message: i18n.t('notices.api.users.pwdChangedSuccessfully')}]
         };
     },
 
@@ -43,7 +39,5 @@ module.exports = {
         frame.response = {
             users: models.map(model => model.toJSON(frame.options))
         };
-
-        debug(frame.response);
     }
 };

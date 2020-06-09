@@ -1,6 +1,8 @@
-const common = require('../../../../lib/common');
+const errors = require('@tryghost/errors');
+const {i18n} = require('../../../../lib/common');
 const auth = require('../../../../services/auth');
 const shared = require('../../../shared');
+const apiMw = require('../../middleware');
 
 const notImplemented = function (req, res, next) {
     // CASE: user is logged in, allow
@@ -18,10 +20,10 @@ const notImplemented = function (req, res, next) {
         // @NOTE: experimental
         actions: ['GET'],
         tags: ['GET', 'PUT', 'DELETE', 'POST'],
+        labels: ['GET', 'PUT', 'DELETE', 'POST'],
         users: ['GET'],
         themes: ['POST', 'PUT'],
         members: ['GET', 'PUT', 'DELETE', 'POST'],
-        subscribers: ['GET', 'PUT', 'DELETE', 'POST'],
         config: ['GET'],
         webhooks: ['POST', 'DELETE'],
         schedules: ['PUT'],
@@ -38,9 +40,9 @@ const notImplemented = function (req, res, next) {
         }
     }
 
-    next(new common.errors.GhostError({
+    next(new errors.GhostError({
         errorType: 'NotImplementedError',
-        message: common.i18n.t('errors.api.common.notImplemented'),
+        message: i18n.t('errors.api.common.notImplemented'),
         statusCode: '501'
     }));
 };
@@ -51,9 +53,33 @@ const notImplemented = function (req, res, next) {
 module.exports.authAdminApi = [
     auth.authenticate.authenticateAdminApi,
     auth.authorize.authorizeAdminApi,
-    shared.middlewares.updateUserLastSeen,
-    shared.middlewares.api.cors,
-    shared.middlewares.urlRedirects.adminRedirect,
+    apiMw.updateUserLastSeen,
+    apiMw.cors,
+    shared.middlewares.urlRedirects.adminSSLAndHostRedirect,
+    shared.middlewares.prettyUrls,
+    notImplemented
+];
+
+/**
+ * Authentication for private endpoints with token in URL
+ * Ex.: For scheduler publish endpoint
+ */
+module.exports.authAdminApiWithUrl = [
+    auth.authenticate.authenticateAdminApiWithUrl,
+    auth.authorize.authorizeAdminApi,
+    apiMw.updateUserLastSeen,
+    apiMw.cors,
+    shared.middlewares.urlRedirects.adminSSLAndHostRedirect,
+    shared.middlewares.prettyUrls,
+    notImplemented
+];
+
+/**
+ * Middleware for public admin endpoints
+ */
+module.exports.publicAdminApi = [
+    apiMw.cors,
+    shared.middlewares.urlRedirects.adminSSLAndHostRedirect,
     shared.middlewares.prettyUrls,
     notImplemented
 ];

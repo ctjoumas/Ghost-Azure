@@ -1,5 +1,5 @@
-var settingsCache = require('../../server/services/settings/cache'),
-    _ = require('lodash');
+const settingsCache = require('../../server/services/settings/cache');
+const _ = require('lodash');
 
 function getContextObject(data, context) {
     /**
@@ -22,6 +22,10 @@ function getContextObject(data, context) {
         chosenContext = data.post;
     } else if (_.includes(context, 'page') && data.page) {
         chosenContext = data.page;
+    } else if (_.includes(context, 'tag') && data.tag) {
+        chosenContext = data.tag;
+    } else if (_.includes(context, 'author') && data.author) {
+        chosenContext = data.author;
     } else if (data[context]) {
         // @NOTE: This is confusing as hell. It tries to get data[['author']], which works, but coincidence?
         chosenContext = data[context];

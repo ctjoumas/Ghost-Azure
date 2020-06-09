@@ -1,10 +1,11 @@
-const fs = require('fs-extra'),
-    path = require('path'),
-    debug = require('ghost-ignition').debug('services:settings:settings-loader'),
-    common = require('../../../server/lib/common'),
-    config = require('../../../server/config'),
-    yamlParser = require('./yaml-parser'),
-    validate = require('./validate');
+const fs = require('fs-extra');
+const path = require('path');
+const debug = require('ghost-ignition').debug('frontend:services:settings:settings-loader');
+const {i18n} = require('../../../server/lib/common');
+const errors = require('@tryghost/errors');
+const config = require('../../../shared/config');
+const yamlParser = require('./yaml-parser');
+const validate = require('./validate');
 
 /**
  * Reads the desired settings YAML file and passes the
@@ -25,12 +26,12 @@ module.exports = function loadSettings(setting) {
         const object = yamlParser(file, fileName);
         return validate(object);
     } catch (err) {
-        if (common.errors.utils.isIgnitionError(err)) {
+        if (errors.utils.isIgnitionError(err)) {
             throw err;
         }
 
-        throw new common.errors.GhostError({
-            message: common.i18n.t('errors.services.settings.loader', {setting: setting, path: contentPath}),
+        throw new errors.GhostError({
+            message: i18n.t('errors.services.settings.loader', {setting: setting, path: contentPath}),
             context: filePath,
             err: err
         });

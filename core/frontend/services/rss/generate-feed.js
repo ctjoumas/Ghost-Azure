@@ -1,12 +1,12 @@
-var downsize = require('downsize'),
-    Promise = require('bluebird'),
-    cheerio = require('cheerio'),
-    RSS = require('rss'),
-    urlUtils = require('../../../server/lib/url-utils'),
-    urlService = require('../url'),
-    generateFeed,
-    generateItem,
-    generateTags;
+const downsize = require('downsize');
+const Promise = require('bluebird');
+const cheerio = require('cheerio');
+const RSS = require('rss');
+const urlUtils = require('../../../shared/url-utils');
+const urlService = require('../url');
+let generateFeed;
+let generateItem;
+let generateTags;
 
 generateTags = function generateTags(data) {
     if (data.tags) {
@@ -23,8 +23,7 @@ generateTags = function generateTags(data) {
 
 generateItem = function generateItem(post, secure) {
     const itemUrl = urlService.getUrlByResourceId(post.id, {secure, absolute: true});
-    const html = post.html ? urlUtils.htmlRelativeToAbsolute(post.html, itemUrl, {secure}) : '';
-    const htmlContent = cheerio.load(html, {decodeEntities: false});
+    const htmlContent = cheerio.load(urlUtils.htmlRelativeToAbsolute(post.html, itemUrl, {secure}) || '', {decodeEntities: false});
     const item = {
         title: post.title,
         // @TODO: DRY this up with data/meta/index & other excerpt code

@@ -1,5 +1,6 @@
 const _ = require('lodash');
 const url = require('./utils/url');
+const settingsCache = require('../../../../../services/settings/cache');
 
 module.exports = {
     read(apiConfig, frame) {
@@ -48,6 +49,23 @@ module.exports = {
 
             if (['cover_image', 'icon', 'logo'].includes(setting.key)) {
                 setting = url.forSetting(setting);
+            }
+
+            //CASE: Ensure we don't store calculated fields `isEnabled/Config` in bulk email settings
+            if (setting.key === 'bulk_email_settings') {
+                const {apiKey = '', domain = '', baseUrl = '', provider = 'mailgun'} = setting.value ? JSON.parse(setting.value) : {};
+                setting.value = JSON.stringify({apiKey, domain, baseUrl, provider});
+            }
+
+            //CASE: Ensure we don't update fromAddress for member as that goes through magic link flow
+            if (setting.key === 'members_subscription_settings') {
+                const memberSubscriptionSettings = setting.value ? JSON.parse(setting.value) : {};
+
+                let subscriptionSettingCache = settingsCache.get('members_subscription_settings', {resolve: false});
+                const settingsCacheValue = subscriptionSettingCache.value ? JSON.parse(subscriptionSettingCache.value) : {};
+                memberSubscriptionSettings.fromAddress = settingsCacheValue.fromAddress;
+
+                setting.value = JSON.stringify(memberSubscriptionSettings);
             }
         });
 

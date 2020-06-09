@@ -1,42 +1,62 @@
 const MembersSSR = require('@tryghost/members-ssr');
 
+const MembersConfigProvider = require('./config');
 const createMembersApiInstance = require('./api');
-const common = require('../../lib/common');
-const urlUtils = require('../../lib/url-utils');
+const createMembersSettingsInstance = require('./settings');
+const {events} = require('../../lib/common');
+const logging = require('../../../shared/logging');
+const urlUtils = require('../../../shared/url-utils');
 const settingsCache = require('../settings/cache');
+const config = require('../../../shared/config');
+const ghostVersion = require('../../lib/ghost-version');
+
+const membersConfig = new MembersConfigProvider({
+    config,
+    settingsCache,
+    urlUtils,
+    logging,
+    ghostVersion
+});
 
 let membersApi;
+let membersSettings;
 
 // Bind to events to automatically keep subscription info up-to-date from settings
-common.events.on('settings.edited', function updateSettingFromModel(settingModel) {
+events.on('settings.edited', function updateSettingFromModel(settingModel) {
     if (!['members_subscription_settings'].includes(settingModel.get('key'))) {
         return;
     }
 
-    const reconfiguredMembersAPI = createMembersApiInstance();
+    const reconfiguredMembersAPI = createMembersApiInstance(membersConfig);
     reconfiguredMembersAPI.bus.on('ready', function () {
         membersApi = reconfiguredMembersAPI;
     });
     reconfiguredMembersAPI.bus.on('error', function (err) {
-        common.logging.error(err);
+        logging.error(err);
     });
 });
 
 const membersService = {
-    isPaymentConfigured() {
-        const settings = settingsCache.get('members_subscription_settings');
-        return !!settings && settings.isPaid && settings.paymentProcessors.length !== 0;
-    },
+    contentGating: require('./content-gating'),
+
+    config: membersConfig,
 
     get api() {
         if (!membersApi) {
-            membersApi = createMembersApiInstance();
+            membersApi = createMembersApiInstance(membersConfig);
 
             membersApi.bus.on('error', function (err) {
-                common.logging.error(err);
+                logging.error(err);
             });
         }
         return membersApi;
+    },
+
+    get settings() {
+        if (!membersSettings) {
+            membersSettings = createMembersSettingsInstance(membersConfig);
+        }
+        return membersSettings;
     },
 
     ssr: MembersSSR({
@@ -45,7 +65,10 @@ const membersService = {
         cookieName: 'ghost-members-ssr',
         cookieCacheName: 'ghost-members-ssr-cache',
         getMembersApi: () => membersService.api
-    })
+    }),
+
+    stripeConnect: require('./stripe-connect')
 };
 
 module.exports = membersService;
+module.exports.middleware = require('./middleware');

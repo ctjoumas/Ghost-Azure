@@ -1,5 +1,6 @@
 const Promise = require('bluebird');
-const common = require('../../lib/common');
+const {i18n} = require('../../lib/common');
+const errors = require('@tryghost/errors');
 const models = require('../../models');
 const permissionsService = require('../../services/permissions');
 const ALLOWED_INCLUDES = ['count.posts', 'permissions', 'roles', 'roles.permissions'];
@@ -56,8 +57,8 @@ module.exports = {
             return models.User.findOne(frame.data, frame.options)
                 .then((model) => {
                     if (!model) {
-                        return Promise.reject(new common.errors.NotFoundError({
-                            message: common.i18n.t('errors.api.users.userNotFound')
+                        return Promise.reject(new errors.NotFoundError({
+                            message: i18n.t('errors.api.users.userNotFound')
                         }));
                     }
 
@@ -89,8 +90,8 @@ module.exports = {
             return models.User.edit(frame.data.users[0], frame.options)
                 .then((model) => {
                     if (!model) {
-                        return Promise.reject(new common.errors.NotFoundError({
-                            message: common.i18n.t('errors.api.users.userNotFound')
+                        return Promise.reject(new errors.NotFoundError({
+                            message: i18n.t('errors.api.users.userNotFound')
                         }));
                     }
 
@@ -126,14 +127,12 @@ module.exports = {
                 frame.options.transacting = t;
 
                 return Promise.all([
-                    models.Accesstoken.destroyByUser(frame.options),
-                    models.Refreshtoken.destroyByUser(frame.options),
                     models.Post.destroyByAuthor(frame.options)
                 ]).then(() => {
                     return models.User.destroy(Object.assign({status: 'all'}, frame.options));
-                }).return(null);
+                }).then(() => null);
             }).catch((err) => {
-                return Promise.reject(new common.errors.NoPermissionError({
+                return Promise.reject(new errors.NoPermissionError({
                     err: err
                 }));
             });
@@ -157,6 +156,7 @@ module.exports = {
             }
         },
         query(frame) {
+            frame.options.skipSessionID = frame.original.session.id;
             return models.User.changePassword(frame.data.password[0], frame.options);
         }
     },

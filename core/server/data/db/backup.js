@@ -1,20 +1,35 @@
 // # Backup Database
 // Provides for backing up the database before making potentially destructive changes
-var fs = require('fs-extra'),
-    path = require('path'),
-    Promise = require('bluebird'),
-    config = require('../../config'),
-    common = require('../../lib/common'),
-    urlUtils = require('../../lib/url-utils'),
-    exporter = require('../exporter'),
+const fs = require('fs-extra');
 
-    writeExportFile,
-    backup;
+const path = require('path');
+const Promise = require('bluebird');
+const config = require('../../../shared/config');
+const logging = require('../../../shared/logging');
+const urlUtils = require('../../../shared/url-utils');
+const exporter = require('../exporter');
+let writeExportFile;
+let backup;
 
 writeExportFile = function writeExportFile(exportResult) {
-    var filename = path.resolve(urlUtils.urlJoin(config.get('paths').contentPath, 'data', exportResult.filename));
+    const filename = path.resolve(urlUtils.urlJoin(config.get('paths').contentPath, 'data', exportResult.filename));
 
     return fs.writeFile(filename, JSON.stringify(exportResult.data)).return(filename);
+};
+
+const readBackup = async (filename) => {
+    const parsedFileName = path.parse(filename);
+    const sanitized = `${parsedFileName.name}${parsedFileName.ext}`;
+    const backupPath = path.resolve(urlUtils.urlJoin(config.get('paths').contentPath, 'data', sanitized));
+
+    const exists = await fs.pathExists(backupPath);
+
+    if (exists) {
+        const backup = await fs.readFile(backupPath);
+        return JSON.parse(backup);
+    } else {
+        return null;
+    }
 };
 
 /**
@@ -23,10 +38,10 @@ writeExportFile = function writeExportFile(exportResult) {
  * @returns {Promise<*>}
  */
 backup = function backup(options) {
-    common.logging.info('Creating database backup');
+    logging.info('Creating database backup');
     options = options || {};
 
-    var props = {
+    const props = {
         data: exporter.doExport(options),
         filename: exporter.fileName(options)
     };
@@ -34,9 +49,12 @@ backup = function backup(options) {
     return Promise.props(props)
         .then(writeExportFile)
         .then(function successMessage(filename) {
-            common.logging.info('Database backup written to: ' + filename);
+            logging.info('Database backup written to: ' + filename);
             return filename;
         });
 };
 
-module.exports = backup;
+module.exports = {
+    backup,
+    readBackup
+};

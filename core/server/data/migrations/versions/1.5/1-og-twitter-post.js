@@ -1,14 +1,14 @@
-const Promise = require('bluebird'),
-    common = require('../../../../lib/common'),
-    commands = require('../../../schema').commands,
-    table = 'posts',
-    columns = ['og_image', 'og_title', 'og_description', 'twitter_image', 'twitter_title', 'twitter_description'],
-    _private = {};
+const Promise = require('bluebird');
+const logging = require('../../../../../shared/logging');
+const commands = require('../../../schema').commands;
+const table = 'posts';
+const columns = ['og_image', 'og_title', 'og_description', 'twitter_image', 'twitter_title', 'twitter_description'];
+const _private = {};
 
 _private.handle = function handle(options) {
-    let type = options.type,
-        isAdding = type === 'Adding',
-        operation = isAdding ? commands.addColumn : commands.dropColumn;
+    let type = options.type;
+    let isAdding = type === 'Adding';
+    let operation = isAdding ? commands.addColumn : commands.dropColumn;
 
     return function (options) {
         let connection = options.connection;
@@ -23,11 +23,11 @@ _private.handle = function handle(options) {
                     return connection.schema.hasColumn(table, column)
                         .then(function (exists) {
                             if (exists && isAdding || !exists && !isAdding) {
-                                common.logging.warn(`${type} column ${table}.${column}`);
+                                logging.warn(`${type} column ${table}.${column}`);
                                 return Promise.resolve();
                             }
 
-                            common.logging.info(`${type} column ${table}.${column}`);
+                            logging.info(`${type} column ${table}.${column}`);
                             return operation(table, column, connection);
                         });
                 });

@@ -3,25 +3,28 @@
 // several basic behaviours such as UUIDs, as well as a set of Data methods for accessing information from the database.
 //
 // The models are internal to Ghost, only the API and some internal functions such as migration and import/export
-// accesses the models directly. All other parts of Ghost, including the blog frontend, admin UI, and apps are only
-// allowed to access data via the API.
-const _ = require('lodash'),
-    bookshelf = require('bookshelf'),
-    moment = require('moment'),
-    Promise = require('bluebird'),
-    ObjectId = require('bson-objectid'),
-    debug = require('ghost-ignition').debug('models:base'),
-    config = require('../../config'),
-    db = require('../../data/db'),
-    common = require('../../lib/common'),
-    security = require('../../lib/security'),
-    schema = require('../../data/schema'),
-    urlUtils = require('../../lib/url-utils'),
-    validation = require('../../data/validation'),
-    plugins = require('../plugins');
+// accesses the models directly.
 
-let ghostBookshelf,
-    proto;
+// All other parts of Ghost, including the frontend & admin UI are only allowed to access data via the API.
+const _ = require('lodash');
+
+const bookshelf = require('bookshelf');
+const moment = require('moment');
+const Promise = require('bluebird');
+const ObjectId = require('bson-objectid');
+const debug = require('ghost-ignition').debug('models:base');
+const config = require('../../../shared/config');
+const db = require('../../data/db');
+const {events, i18n} = require('../../lib/common');
+const logging = require('../../../shared/logging');
+const errors = require('@tryghost/errors');
+const security = require('../../lib/security');
+const schema = require('../../data/schema');
+const urlUtils = require('../../../shared/url-utils');
+const validation = require('../../data/validation');
+const plugins = require('../plugins');
+let ghostBookshelf;
+let proto;
 
 // ### ghostBookshelf
 // Initializes a new Bookshelf instance called ghostBookshelf, for reference elsewhere in Ghost.
@@ -35,6 +38,9 @@ ghostBookshelf.plugin(plugins.transactionEvents);
 
 // Load the Ghost filter plugin, which handles applying a 'filter' to findPage requests
 ghostBookshelf.plugin(plugins.filter);
+
+// Load the Ghost search plugin, which handles applying a search query to findPage requests
+ghostBookshelf.plugin(plugins.search);
 
 // Load the Ghost include count plugin, which allows for the inclusion of cross-table counts
 ghostBookshelf.plugin(plugins.includeCount);
@@ -58,7 +64,7 @@ ghostBookshelf.plugin('bookshelf-relations', {
         belongsToMany: {
             after: function (existing, targets, options) {
                 // reorder tags/authors
-                var queryOptions = {
+                const queryOptions = {
                     query: {
                         where: {}
                     }
@@ -124,7 +130,7 @@ const addAction = (model, event, options) => {
                     err = err[0];
                 }
 
-                common.logging.error(new common.errors.InternalServerError({
+                logging.error(new errors.InternalServerError({
                     err
                 }));
             });
@@ -180,7 +186,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             debug(model.tableName, ghostEvent);
 
             // @NOTE: Internal Ghost events. These are very granular e.g. post.published
-            common.events.emit(ghostEvent, model, opts);
+            events.emit(ghostEvent, model, opts);
         };
 
         if (!options.transacting) {
@@ -221,7 +227,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
     // Bookshelf `initialize` - declare a constructor-like method for model creation
     initialize: function initialize() {
-        var self = this;
+        const self = this;
 
         // NOTE: triggered before `creating`/`updating`
         this.on('saving', function onSaving(newObj, attrs, options) {
@@ -428,7 +434,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * date format is now in each db the same
      */
     fixDatesWhenSave: function fixDates(attrs) {
-        var self = this;
+        const self = this;
 
         _.each(attrs, function each(value, key) {
             if (value !== null
@@ -450,7 +456,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      *   - knex wraps the UTC value into a local JS Date
      */
     fixDatesWhenFetch: function fixDates(attrs) {
-        var self = this, dateMoment;
+        const self = this;
+        let dateMoment;
 
         _.each(attrs, function each(value, key) {
             if (value !== null
@@ -473,7 +480,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
     // Convert integers to real booleans
     fixBools: function fixBools(attrs) {
-        var self = this;
+        const self = this;
         _.each(attrs, function each(value, key) {
             if (Object.prototype.hasOwnProperty.call(schema.tables[self.tableName], key)
                 && schema.tables[self.tableName][key].type === 'bool') {
@@ -555,8 +562,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         } else if (options.context.external) {
             return ghostBookshelf.Model.externalUser;
         } else {
-            throw new common.errors.NotFoundError({
-                message: common.i18n.t('errors.models.base.index.missingContext'),
+            throw new errors.NotFoundError({
+                message: i18n.t('errors.models.base.index.missingContext'),
                 level: 'critical'
             });
         }
@@ -585,6 +592,15 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         const options = ghostBookshelf.Model.filterOptions(unfilteredOptions, 'toJSON');
         options.omitPivot = true;
 
+        /**
+         * removes null relations coming from `hasOne` - https://bookshelfjs.org/api.html#Model-instance-hasOne
+         * Based on https://github.com/bookshelf/bookshelf/issues/72#issuecomment-25164617
+         */
+        _.each(this.relations, (value, key) => {
+            if (_.isEmpty(value)) {
+                delete this.relations[key];
+            }
+        });
         // CASE: get JSON of previous attrs
         if (options.previous) {
             const clonedModel = _.cloneDeep(this);
@@ -673,11 +689,11 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         case 'edit':
             return baseOptions.concat(extraOptions, ['id', 'require']);
         case 'findOne':
-            return baseOptions.concat(extraOptions, ['columns', 'require']);
+            return baseOptions.concat(extraOptions, ['columns', 'require', 'mongoTransformer']);
         case 'findAll':
-            return baseOptions.concat(extraOptions, ['filter', 'columns']);
+            return baseOptions.concat(extraOptions, ['filter', 'columns', 'mongoTransformer']);
         case 'findPage':
-            return baseOptions.concat(extraOptions, ['filter', 'order', 'page', 'limit', 'columns']);
+            return baseOptions.concat(extraOptions, ['filter', 'order', 'page', 'limit', 'columns', 'mongoTransformer']);
         default:
             return baseOptions.concat(extraOptions);
         }
@@ -691,9 +707,9 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Object} The filtered results of the passed in data, containing only what's allowed in the schema.
      */
     filterData: function filterData(data) {
-        var permittedAttributes = this.prototype.permittedAttributes(),
-            filteredData = _.pick(data, permittedAttributes),
-            sanitizedData = this.sanitizeData(filteredData);
+        const permittedAttributes = this.prototype.permittedAttributes();
+        const filteredData = _.pick(data, permittedAttributes);
+        const sanitizedData = this.sanitizeData(filteredData);
 
         return sanitizedData;
     },
@@ -720,7 +736,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * Sanitize relations.
      */
     sanitizeData: function sanitizeData(data) {
-        var tableName = _.result(this.prototype, 'tableName'), date;
+        const tableName = _.result(this.prototype, 'tableName');
+        let date;
 
         _.each(data, (value, property) => {
             if (value !== null
@@ -732,8 +749,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
                 // CASE: client sends `0000-00-00 00:00:00`
                 if (isNaN(date)) {
-                    throw new common.errors.ValidationError({
-                        message: common.i18n.t('errors.models.base.invalidDate', {key: property}),
+                    throw new errors.ValidationError({
+                        message: i18n.t('errors.models.base.invalidDate', {key: property}),
                         code: 'DATE_INVALID'
                     });
                 }
@@ -742,7 +759,13 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             }
 
             if (this.prototype.relationships && this.prototype.relationships.indexOf(property) !== -1) {
-                _.each(data[property], (relation, indexInArr) => {
+                let relations = data[property];
+
+                // CASE: 1:1 relation will have single data point
+                if (!_.isArray(data[property])) {
+                    relations = [data[property]];
+                }
+                _.each(relations, (relation, indexInArr) => {
                     _.each(relation, (value, relationProperty) => {
                         if (value !== null
                             && Object.prototype.hasOwnProperty.call(schema.tables[this.prototype.relationshipBelongsTo[property]], relationProperty)
@@ -753,8 +776,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
                             // CASE: client sends `0000-00-00 00:00:00`
                             if (isNaN(date)) {
-                                throw new common.errors.ValidationError({
-                                    message: common.i18n.t('errors.models.base.invalidDate', {key: relationProperty}),
+                                throw new errors.ValidationError({
+                                    message: i18n.t('errors.models.base.invalidDate', {key: relationProperty}),
                                     code: 'DATE_INVALID'
                                 });
                             }
@@ -780,14 +803,14 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         filterConfig = filterConfig || {};
 
         if (Object.prototype.hasOwnProperty.call(unfilteredOptions, 'include')) {
-            throw new common.errors.IncorrectUsageError({
+            throw new errors.IncorrectUsageError({
                 message: 'The model layer expects using `withRelated`.'
             });
         }
 
-        var options = _.cloneDeep(unfilteredOptions),
-            extraAllowedProperties = filterConfig.extraAllowedProperties || [],
-            permittedOptions;
+        let options = _.cloneDeep(unfilteredOptions);
+        const extraAllowedProperties = filterConfig.extraAllowedProperties || [];
+        let permittedOptions;
 
         permittedOptions = this.permittedOptions(methodName, options);
         permittedOptions = _.union(permittedOptions, extraAllowedProperties);
@@ -809,8 +832,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Promise(ghostBookshelf.Collection)} Collection of all Models
      */
     findAll: function findAll(unfilteredOptions) {
-        var options = this.filterOptions(unfilteredOptions, 'findAll'),
-            itemCollection = this.forge();
+        const options = this.filterOptions(unfilteredOptions, 'findAll');
+        const itemCollection = this.forge();
 
         // @TODO: we can't use order raw when running migrations (see https://github.com/tgriesser/knex/issues/2763)
         if (this.orderDefaultRaw && !options.migrating) {
@@ -856,15 +879,18 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @param {Object} unfilteredOptions
      */
     findPage: function findPage(unfilteredOptions) {
-        var options = this.filterOptions(unfilteredOptions, 'findPage'),
-            itemCollection = this.forge(),
-            requestedColumns = options.columns;
+        const options = this.filterOptions(unfilteredOptions, 'findPage');
+        const itemCollection = this.forge();
+        const requestedColumns = options.columns;
 
         // Set this to true or pass ?debug=true as an API option to get output
         itemCollection.debug = options.debug && config.get('env') !== 'production';
 
         // Add Filter behaviour
         itemCollection.applyDefaultAndCustomFilters(options);
+
+        // Apply model-specific search behaviour
+        itemCollection.applySearchQuery(options);
 
         // Ensure only valid fields/columns are added to query
         // and append default columns to fetch
@@ -898,6 +924,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                 data: data,
                 meta: {pagination: response.pagination}
             };
+        }).catch((err) => {
+            throw err;
         });
     },
 
@@ -962,7 +990,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                     return object.save(data, options);
                 }
 
-                throw new common.errors.NotFoundError();
+                throw new errors.NotFoundError();
             });
     },
 
@@ -974,8 +1002,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Promise(ghostBookshelf.Model)} Newly Added Model
      */
     add: function add(data, unfilteredOptions) {
-        var options = this.filterOptions(unfilteredOptions, 'add'),
-            model;
+        const options = this.filterOptions(unfilteredOptions, 'add');
+        let model;
 
         data = this.filterData(data);
         model = this.forge(data);
@@ -1024,14 +1052,17 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Promise(String)} Resolves to a unique slug string
      */
     generateSlug: function generateSlug(Model, base, options) {
-        var slug,
-            slugTryCount = 1,
-            baseName = Model.prototype.tableName.replace(/s$/, ''),
-            // Look for a matching slug, append an incrementing number if so
-            checkIfSlugExists, longSlug;
+        let slug;
+        let slugTryCount = 1;
+        const baseName = Model.prototype.tableName.replace(/s$/, '');
+
+        // Look for a matching slug, append an incrementing number if so
+        let checkIfSlugExists;
+
+        let longSlug;
 
         checkIfSlugExists = function checkIfSlugExists(slugToFind) {
-            var args = {slug: slugToFind};
+            const args = {slug: slugToFind};
 
             // status is needed for posts
             if (options && options.status) {
@@ -1039,7 +1070,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             }
 
             return Model.findOne(args, options).then(function then(found) {
-                var trimSpace;
+                let trimSpace;
 
                 if (!found) {
                     return slugToFind;
@@ -1097,8 +1128,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         }
 
         // Some keywords cannot be changed
-        const slugList = _.union(config.get('slugs').reserved, urlUtils.getProtectedSlugs());
-        slug = _.includes(slugList, slug) ? slug + '-' + baseName : slug;
+        slug = _.includes(urlUtils.getProtectedSlugs(), slug) ? slug + '-' + baseName : slug;
 
         // if slug is empty after trimming use the model name
         if (!slug) {
@@ -1110,7 +1140,9 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
     },
 
     parseOrderOption: function (order, withRelated) {
-        var permittedAttributes, result, rules;
+        let permittedAttributes;
+        let result;
+        let rules;
 
         permittedAttributes = this.prototype.permittedAttributes();
         if (withRelated && withRelated.indexOf('count.posts') > -1) {
@@ -1120,7 +1152,9 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         rules = order.split(',');
 
         _.each(rules, function (rule) {
-            var match, field, direction;
+            let match;
+            let field;
+            let direction;
 
             match = /^([a-z0-9_.]+)\s+(asc|desc)$/i.exec(rule.trim());
 
