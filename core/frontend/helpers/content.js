@@ -5,28 +5,11 @@
 // escape it or tell handlebars to leave it alone with a triple-brace.
 //
 // Enables tag-safe truncation of content by characters or words.
-//
-// Dev flag feature: In case of restricted content access for member-only posts, shows CTA box
 
-const {templates, hbs, SafeString} = require('../services/proxy');
+const {SafeString} = require('./proxy');
 const downsize = require('downsize');
-const _ = require('lodash');
-const createFrame = hbs.handlebars.createFrame;
-
-function restrictedCta(options) {
-    options = options || {};
-    options.data = options.data || {};
-    _.merge(this, {
-        accentColor: (options.data.site && options.data.site.accent_color) || '#3db0ef'
-    });
-    const data = createFrame(options.data);
-    return templates.execute('content', this, {data});
-}
 
 module.exports = function content(options = {}) {
-    let self = this;
-    let args = arguments;
-
     const hash = options.hash || {};
     const truncateOptions = {};
     let runTruncate = false;
@@ -40,10 +23,6 @@ module.exports = function content(options = {}) {
 
     if (this.html === null) {
         this.html = '';
-    }
-
-    if (!_.isUndefined(this.access) && !this.access) {
-        return restrictedCta.apply(self, args);
     }
 
     if (runTruncate) {

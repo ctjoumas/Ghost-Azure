@@ -1,5 +1,5 @@
 const {isPlainObject} = require('lodash');
-const config = require('../../../shared/config');
+const config = require('../../config');
 const labs = require('../../services/labs');
 const ghostVersion = require('../../lib/ghost-version');
 
@@ -9,8 +9,7 @@ module.exports = {
     read: {
         permissions: false,
         query() {
-            const billingUrl = config.get('host_settings:billing:enabled') ? config.get('host_settings:billing:url') : '';
-            const response = {
+            return {
                 version: ghostVersion.full,
                 environment: config.get('env'),
                 database: config.get('database').client,
@@ -18,15 +17,8 @@ module.exports = {
                 useGravatar: !config.isPrivacyDisabled('useGravatar'),
                 labs: labs.getAll(),
                 clientExtensions: config.get('clientExtensions') || {},
-                enableDeveloperExperiments: config.get('enableDeveloperExperiments') || false,
-                stripeDirect: config.get('stripeDirect'),
-                mailgunIsConfigured: config.get('bulkEmail') && config.get('bulkEmail').mailgun,
-                emailAnalytics: config.get('emailAnalytics')
+                enableDeveloperExperiments: config.get('enableDeveloperExperiments') || false
             };
-            if (billingUrl) {
-                response.billingUrl = billingUrl;
-            }
-            return response;
         }
     }
 };

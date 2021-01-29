@@ -1,6 +1,6 @@
 const _ = require('lodash');
 const semver = require('semver');
-const config = require('../../../../shared/config');
+const config = require('../../../../server/config');
 const DEFAULTS = require('./defaults');
 const allowedKeys = ['ghost-api'];
 
@@ -12,11 +12,10 @@ const allowedKeys = ['ghost-api'];
  * ^0.1.0
  * ^2.0.0
  * 2.0.0
- * v3
  * v2
  * v0.1
  * canary
- *
+ * 
  * Goal: Extract major version from input.
  *
  * @param packageJson
@@ -33,17 +32,17 @@ module.exports = (packageJson) => {
                 if (version === 'canary') {
                     availableApiVersions.canary = version;
                 } else {
-                    availableApiVersions[semver.major(semver.coerce(version).version)] = version;
+                    availableApiVersions[semver(semver.coerce(version).version).major] = version;
                 }
             });
 
             const apiVersion = packageJson.engines['ghost-api'];
-            const apiVersionMajor = apiVersion === 'canary' ? 'canary' : semver.major(semver.coerce(apiVersion).version);
+            const apiVersionMajor = apiVersion === 'canary' ? 'canary' : semver(semver.coerce(apiVersion).version).major;
 
             if (availableApiVersions[apiVersionMajor]) {
                 packageJson.engines['ghost-api'] = availableApiVersions[apiVersionMajor];
             } else {
-                packageJson.engines['ghost-api'] = 'v3';
+                packageJson.engines['ghost-api'] = 'v0.1';
             }
         }
 

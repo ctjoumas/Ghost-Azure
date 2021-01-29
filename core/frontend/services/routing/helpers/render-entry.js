@@ -1,6 +1,6 @@
-const debug = require('ghost-ignition').debug('services:routing:helpers:render-post');
-const formatResponse = require('./format-response');
-const renderer = require('./renderer');
+const debug = require('ghost-ignition').debug('services:routing:helpers:render-post'),
+    formatResponse = require('./format-response'),
+    renderer = require('./renderer');
 /**
  * @description Helper to handle rendering multiple resources.
  *
@@ -10,7 +10,7 @@ const renderer = require('./renderer');
  */
 module.exports = function renderEntry(req, res) {
     debug('renderEntry called');
-    return function renderEntryClosure(entry) {
+    return function renderEntry(entry) {
         // Format data 2 - 1 is in preview/entry
         // Render
         return renderer(req, res, formatResponse.entry(entry));

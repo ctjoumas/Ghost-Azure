@@ -1,7 +1,7 @@
 const _ = require('lodash');
 const debug = require('ghost-ignition').debug('services:webhooks:trigger');
-const logging = require('../../../shared/logging');
-const request = require('../../lib/request');
+const common = require('../../lib/common');
+const request = require('../../../server/lib/request');
 const models = require('../../models');
 const payload = require('./payload');
 
@@ -21,7 +21,7 @@ const webhooks = {
                 last_triggered_error: data.error || null
             }, {id: webhook.id})
             .catch(() => {
-                logging.warn(`Unable to update "last_triggered" for webhook: ${webhook.id}`);
+                common.logging.warn(`Unable to update "last_triggered" for webhook: ${webhook.id}`);
             });
     },
 
@@ -30,7 +30,7 @@ const webhooks = {
             .Webhook
             .destroy({id: webhook.id}, {context: {internal: true}})
             .catch(() => {
-                logging.warn(`Unable to destroy webhook ${webhook.id}.`);
+                common.logging.warn(`Unable to destroy webhook ${webhook.id}.`);
             });
     }
 };
@@ -47,7 +47,7 @@ const response = {
     onError(webhook) {
         return (err) => {
             if (err.statusCode === 410) {
-                logging.info(`Webhook destroyed (410 response) for "${webhook.get('event')}" with url "${webhook.get('target_url')}".`);
+                common.logging.info(`Webhook destroyed (410 response) for "${webhook.get('event')}" with url "${webhook.get('target_url')}".`);
 
                 return webhooks.destroy(webhook);
             }
@@ -57,20 +57,20 @@ const response = {
                 error: `Request failed: ${err.code || 'unknown'}`
             });
 
-            logging.warn(`Request to ${webhook.get('target_url') || null} failed because of: ${err.code || ''}.`);
+            common.logging.warn(`Request to ${webhook.get('target_url') || null} failed because of: ${err.code || ''}.`);
         };
     }
 };
 
 module.exports = (event, model) => {
     webhooks.getAll(event)
-        .then((hooks) => {
-            debug(`${hooks.models.length} webhooks found for ${event}.`);
+        .then((webhooks) => {
+            debug(`${webhooks.models.length} webhooks found for ${event}.`);
 
-            _.each(hooks.models, (webhook) => {
+            _.each(webhooks.models, (webhook) => {
                 payload(webhook.get('event'), model)
-                    .then((hookPayload) => {
-                        const reqPayload = JSON.stringify(hookPayload);
+                    .then((payload) => {
+                        const reqPayload = JSON.stringify(payload);
                         const url = webhook.get('target_url');
                         const opts = {
                             body: reqPayload,
@@ -82,7 +82,7 @@ module.exports = (event, model) => {
                             retry: 5
                         };
 
-                        logging.info(`Triggering webhook for "${webhook.get('event')}" with url "${url}"`);
+                        common.logging.info(`Trigger Webhook for  "${webhook.get('event')}" with url "${url}".`);
 
                         request(url, opts)
                             .then(response.onSuccess(webhook))

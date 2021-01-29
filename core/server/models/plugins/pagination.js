@@ -1,12 +1,11 @@
 // # Pagination
 //
 // Extends Bookshelf.Model with a `fetchPage` method. Handles everything to do with paginated requests.
-const _ = require('lodash');
-
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
-let defaults;
-let paginationUtils;
+var _ = require('lodash'),
+    common = require('../../lib/common'),
+    defaults,
+    paginationUtils,
+    pagination;
 
 /**
  * ### Default pagination values
@@ -66,16 +65,15 @@ paginationUtils = {
      * @returns {pagination} pagination metadata
      */
     formatResponse: function formatResponse(totalItems, options) {
-        const calcPages = Math.ceil(totalItems / options.limit) || 0;
-
-        const pagination = {
-            page: options.page || defaults.page,
-            limit: options.limit,
-            pages: calcPages === 0 ? 1 : calcPages,
-            total: totalItems,
-            next: null,
-            prev: null
-        };
+        var calcPages = Math.ceil(totalItems / options.limit) || 0,
+            pagination = {
+                page: options.page || defaults.page,
+                limit: options.limit,
+                pages: calcPages === 0 ? 1 : calcPages,
+                total: totalItems,
+                next: null,
+                prev: null
+            };
 
         if (pagination.pages > 1) {
             if (pagination.page === 1) {
@@ -89,27 +87,6 @@ paginationUtils = {
         }
 
         return pagination;
-    },
-
-    /**
-     *
-     * @param {Bookshelf.Model} model instance of Bookshelf model
-     * @param {string} propertyName property to be inspected and included in the relation
-     */
-    handleRelation: function handleRelation(model, propertyName) {
-        const tableName = _.result(model.constructor.prototype, 'tableName');
-
-        const targetTable = propertyName.includes('.') && propertyName.split('.')[0];
-
-        if (targetTable && targetTable !== tableName) {
-            if (!model.eagerLoad) {
-                model.eagerLoad = [];
-            }
-
-            if (!model.eagerLoad.includes(targetTable)) {
-                model.eagerLoad.push(targetTable);
-            }
-        }
     }
 };
 
@@ -146,7 +123,7 @@ paginationUtils = {
  * Extends `bookshelf.Model` with `fetchPage`
  * @param {Bookshelf} bookshelf \- the instance to plug into
  */
-const pagination = function pagination(bookshelf) {
+pagination = function pagination(bookshelf) {
     // Extend updates the first object passed to it, no need for an assignment
     _.extend(bookshelf.Model.prototype, {
         /**
@@ -165,30 +142,18 @@ const pagination = function pagination(bookshelf) {
             options = paginationUtils.parseOptions(options);
 
             // Get the table name and idAttribute for this model
-            const tableName = _.result(this.constructor.prototype, 'tableName');
-
-            const idAttribute = _.result(this.constructor.prototype, 'idAttribute');
-            const self = this;
+            var tableName = _.result(this.constructor.prototype, 'tableName'),
+                idAttribute = _.result(this.constructor.prototype, 'idAttribute'),
+                self = this,
+                countPromise = this.query().clone().select(
+                    bookshelf.knex.raw('count(distinct ' + tableName + '.' + idAttribute + ') as aggregate')
+                );
 
             // #### Pre count clauses
             // Add any where or join clauses which need to be included with the aggregate query
 
             // Clone the base query & set up a promise to get the count of total items in the full set
-            // Necessary due to lack of support for `count distinct` in bookshelf's count()
-            // Skipped if limit='all' as we can use the length of the fetched data set
-            let countPromise = Promise.resolve();
-            if (options.limit !== 'all') {
-                const countQuery = this.query().clone();
-
-                if (options.transacting) {
-                    countQuery.transacting(options.transacting);
-                }
-
-                countPromise = countQuery.select(
-                    bookshelf.knex.raw('count(distinct ' + tableName + '.' + idAttribute + ') as aggregate')
-                );
-            }
-
+            // Due to lack of support for count distinct, this is pretty complex.
             return countPromise.then(function (countResult) {
                 // #### Post count clauses
                 // Add any where or join clauses which need to NOT be included with the aggregate query
@@ -202,21 +167,13 @@ const pagination = function pagination(bookshelf) {
                         if (property === 'count.posts') {
                             self.query('orderBy', 'count__posts', direction);
                         } else {
-                            self.query('orderBy', property, direction);
-
-                            paginationUtils.handleRelation(self, property);
+                            self.query('orderBy', tableName + '.' + property, direction);
                         }
                     });
-                }
-
-                if (options.orderRaw) {
-                    self.query((qb) => {
+                } else if (options.orderRaw) {
+                    self.query(function (qb) {
                         qb.orderByRaw(options.orderRaw);
                     });
-                }
-
-                if (!_.isEmpty(options.eagerLoad)) {
-                    options.eagerLoad.forEach(property => paginationUtils.handleRelation(self, property));
                 }
 
                 if (options.groups && !_.isEmpty(options.groups)) {
@@ -227,13 +184,8 @@ const pagination = function pagination(bookshelf) {
 
                 // Setup the promise to do a fetch on our collection, running the specified query
                 // @TODO: ensure option handling is done using an explicit pick elsewhere
-
                 return self.fetchAll(_.omit(options, ['page', 'limit']))
                     .then(function (fetchResult) {
-                        if (options.limit === 'all') {
-                            countResult = [{aggregate: fetchResult.length}];
-                        }
-
                         return {
                             collection: fetchResult,
                             pagination: paginationUtils.formatResponse(countResult[0] ? countResult[0].aggregate : 0, options)
@@ -242,7 +194,7 @@ const pagination = function pagination(bookshelf) {
                     .catch(function (err) {
                         // e.g. offset/limit reached max allowed integer value
                         if (err.errno === 20 || err.errno === 1064) {
-                            throw new errors.NotFoundError({message: i18n.t('errors.errors.pageNotFound')});
+                            throw new common.errors.NotFoundError({message: common.i18n.t('errors.errors.pageNotFound')});
                         }
 
                         throw err;
@@ -250,8 +202,8 @@ const pagination = function pagination(bookshelf) {
             }).catch((err) => {
                 // CASE: SQL syntax is incorrect
                 if (err.errno === 1054 || err.errno === 1) {
-                    throw new errors.BadRequestError({
-                        message: i18n.t('errors.models.general.sql'),
+                    throw new common.errors.BadRequestError({
+                        message: common.i18n.t('errors.models.general.sql'),
                         err: err
                     });
                 }

@@ -25,9 +25,5 @@ module.exports = {
 
     get tags() {
         return require('./tags');
-    },
-
-    get webhooks() {
-        return require('./webhooks');
     }
 };

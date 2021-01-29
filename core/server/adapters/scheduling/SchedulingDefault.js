@@ -2,8 +2,7 @@ const util = require('util');
 const moment = require('moment');
 const debug = require('ghost-ignition').debug('scheduling-default');
 const SchedulingBase = require('./SchedulingBase');
-const logging = require('../../../shared/logging');
-const errors = require('@tryghost/errors');
+const common = require('../../lib/common');
 const request = require('../../lib/request');
 
 /**
@@ -14,7 +13,7 @@ const request = require('../../lib/request');
  *
  * "node-cron" did not perform well enough and we really just needed a simple time management.
 
- * @param {Object} options
+ * @param {Objec†} options
  * @constructor
  */
 function SchedulingDefault(options) {
@@ -46,13 +45,53 @@ util.inherits(SchedulingDefault, SchedulingBase);
  * A new job get's added when the post scheduler module receives a new model event e.g. "post.scheduled".
  *
  * @param {Object} object
- * @param {Number} object.time - unix timestamp
- * @param {String} object.url - full post/page API url to publish the resource.
- * @param {Object} object.extra
- * @param {String} object.extra.httpMethod - the method of the target API endpoint.
- * @param {Number} object.extra.oldTime - the previous published time.
+ *                       {
+ *                          time: [Number] A unix timestamp
+ *                          url:  [String] The full post/page API url to publish it.
+ *                          extra: {
+ *                              httpMethod: [String] The method of the target API endpoint.
+ *                              oldTime:    [Number] The previous published time.
+ *                          }
+ *                       }
  */
 SchedulingDefault.prototype.schedule = function (object) {
+    this._addJob(object);
+};
+
+/**
+ * @description Remove & schedule a job.
+ *
+ * This function is useful if the model layer detects a rescheduling event.
+ * Rescheduling means: scheduled -> update published at.
+ * To be able to delete the previous job we need the old published time.
+ *
+ * @param {Object} object
+ *                       {
+ *                          time: [Number] A unix timestamp
+ *                          url:  [String] The full post/page API url to publish it.
+ *                          extra: {
+ *                              httpMethod: [String] The method of the target API endpoint.
+ *                              oldTime:    [Number] The previous published time.
+ *                          }
+ *                       }
+ * @param {Object} options
+ *                      {
+ *                          bootstrap: [Boolean]
+ *                      }
+ */
+SchedulingDefault.prototype.reschedule = function (object, options = {bootstrap: false}) {
+    /**
+     * CASE:
+     * The post scheduling unit calls "reschedule" on bootstrap, because other custom scheduling implementations
+     * could use a database and we need to give the chance to update the job (delete + re-add).
+     *
+     * We receive a "bootstrap" variable to ensure that jobs are scheduled correctly for this scheduler implementation,
+     * because "object.extra.oldTime" === "object.time". If we mark the job as deleted, it won't get scheduled.
+     */
+    if (!options.bootstrap) {
+        this._deleteJob({time: object.extra.oldTime, url: object.url});
+    }
+
     this._addJob(object);
 };
 
@@ -62,26 +101,17 @@ SchedulingDefault.prototype.schedule = function (object) {
  * Unscheduling means: scheduled -> draft.
  *
  * @param {Object} object
- * @param {Number} object.time - unix timestamp
- * @param {String} object.url - full post/page API url to publish the resource.
- * @param {Object} object.extra
- * @param {String} object.extra.httpMethod - the method of the target API endpoint.
- * @param {Number} object.extra.oldTime - the previous published time.
- * @param {Object} options
- * @param {Boolean} [options.bootstrap]
+ *                       {
+ *                          time: [Number] A unix timestamp
+ *                          url:  [String] The full post/page API url to publish it.
+ *                          extra: {
+ *                              httpMethod: [String] The method of the target API endpoint.
+ *                              oldTime:    [Number] The previous published time.
+ *                          }
+ *                       }
  */
-SchedulingDefault.prototype.unschedule = function (object, options = {bootstrap: false}) {
-    /**
-     * CASE:
-     * The post scheduling unit triggers "reschedule" on bootstrap, because other custom scheduling implementations
-     * could use a database and we need to give the chance to update the job (delete + re-add).
-     *
-     * We receive a "bootstrap" variable to ensure that jobs are scheduled correctly for this scheduler implementation,
-     * because "object.extra.oldTime" === "object.time". If we mark the job as deleted, it won't get scheduled.
-     */
-    if (!options.bootstrap) {
-        this._deleteJob(object);
-    }
+SchedulingDefault.prototype.unschedule = function (object) {
+    this._deleteJob(object);
 };
 
 /**
@@ -92,7 +122,8 @@ SchedulingDefault.prototype.unschedule = function (object, options = {bootstrap:
  */
 SchedulingDefault.prototype.run = function () {
     const self = this;
-    let timeout = null;
+    let timeout = null,
+        recursiveRun;
 
     // NOTE: Ensure the scheduler never runs twice.
     if (this.isRunning) {
@@ -101,10 +132,10 @@ SchedulingDefault.prototype.run = function () {
 
     this.isRunning = true;
 
-    let recursiveRun = function recursiveRun() {
+    recursiveRun = function recursiveRun() {
         timeout = setTimeout(function () {
-            const times = Object.keys(self.allJobs);
-            const nextJobs = {};
+            const times = Object.keys(self.allJobs),
+                nextJobs = {};
 
             // CASE: We stop till the offset is too big. We are only interested in jobs which need get executed soon.
             times.every(function (time) {
@@ -134,11 +165,11 @@ SchedulingDefault.prototype.run = function () {
  * @private
  */
 SchedulingDefault.prototype._addJob = function (object) {
-    let timestamp = moment(object.time).valueOf();
-    let keys = [];
-    let sortedJobs = {};
-    let instantJob = {};
-    let i = 0;
+    let timestamp = moment(object.time).valueOf(),
+        keys = [],
+        sortedJobs = {},
+        instantJob = {},
+        i = 0;
 
     // CASE: should have been already pinged or should be pinged soon
     if (moment(timestamp).diff(moment(), 'minutes') < this.offsetInMinutes) {
@@ -210,12 +241,12 @@ SchedulingDefault.prototype._deleteJob = function (object) {
  * We can't use "process.nextTick" otherwise we will block I/O operations.
  */
 SchedulingDefault.prototype._execute = function (jobs) {
-    const keys = Object.keys(jobs);
-    const self = this;
+    const keys = Object.keys(jobs),
+        self = this;
 
     keys.forEach(function (timestamp) {
-        let timeout = null;
-        let diff = moment(Number(timestamp)).diff(moment());
+        let timeout = null,
+            diff = moment(Number(timestamp)).diff(moment());
 
         // NOTE: awake a little before...
         timeout = setTimeout(function () {
@@ -270,7 +301,7 @@ SchedulingDefault.prototype._pingUrl = function (object) {
 
     const httpMethod = object.extra ? object.extra.httpMethod : 'PUT';
     const tries = object.tries || 0;
-    const requestTimeout = (object.extra && object.extra.timeoutInMS) ? object.extra.timeoutInMS : 1000 * 5;
+    const requestTimeout = object.extra ? object.extra.timeoutInMS : 1000 * 5;
     const maxTries = 30;
 
     const options = {
@@ -306,7 +337,7 @@ SchedulingDefault.prototype._pingUrl = function (object) {
                 this._pingUrl(object);
             }, this.retryTimeoutInMs);
 
-            logging.error(new errors.GhostError({
+            common.logging.error(new common.errors.GhostError({
                 err,
                 context: 'Retrying...',
                 level: 'normal'
@@ -315,7 +346,7 @@ SchedulingDefault.prototype._pingUrl = function (object) {
             return;
         }
 
-        logging.error(new errors.GhostError({
+        common.logging.error(new common.errors.GhostError({
             err,
             level: 'critical'
         }));

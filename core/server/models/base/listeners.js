@@ -1,23 +1,64 @@
-const moment = require('moment-timezone');
-const _ = require('lodash');
-const models = require('../../models');
-const {events} = require('../../lib/common');
-const logging = require('../../../shared/logging');
-const errors = require('@tryghost/errors');
-const {sequence} = require('@tryghost/promise');
+var moment = require('moment-timezone'),
+    _ = require('lodash'),
+    models = require('../../models'),
+    common = require('../../lib/common'),
+    sequence = require('../../lib/promise/sequence');
+
+/**
+ * @TODO REMOVE WHEN v0.1 IS DROPPED
+ * WHEN access token is created we will update last_seen for user.
+ */
+common.events.on('token.added', function (tokenModel) {
+    models.User.findOne({id: tokenModel.get('user_id')})
+        .then(function (user) {
+            return user.updateLastSeen();
+        })
+        .catch(function (err) {
+            common.logging.error(new common.errors.GhostError({err: err, level: 'critical'}));
+        });
+});
+
+/**
+ * WHEN user get's suspended (status=inactive), we delete his tokens to ensure
+ * he can't login anymore
+ *
+ * NOTE:
+ *   - this event get's triggered either on user update (suspended) or if an **active** user get's deleted.
+ *   - if an active user get's deleted, we have to access the previous attributes, because this is how bookshelf works
+ *     if you delete a user.
+ */
+common.events.on('user.deactivated', function (userModel, options) {
+    options = options || {};
+    options = _.merge({}, options, {id: userModel.id || userModel.previousAttributes().id});
+
+    if (options.importing) {
+        return;
+    }
+
+    models.Accesstoken.destroyByUser(options)
+        .then(function () {
+            return models.Refreshtoken.destroyByUser(options);
+        })
+        .catch(function (err) {
+            common.logging.error(new common.errors.GhostError({
+                err: err,
+                level: 'critical'
+            }));
+        });
+});
 
 /**
  * WHEN timezone changes, we will:
  * - reschedule all scheduled posts
  * - draft scheduled posts, when the published_at would be in the past
  */
-events.on('settings.timezone.edited', function (settingModel, options) {
+common.events.on('settings.active_timezone.edited', function (settingModel, options) {
     options = options || {};
     options = _.merge({}, options, {context: {internal: true}});
 
-    const newTimezone = settingModel.attributes.value;
-    const previousTimezone = settingModel._previousAttributes.value;
-    const timezoneOffsetDiff = moment.tz(previousTimezone).utcOffset() - moment.tz(newTimezone).utcOffset();
+    var newTimezone = settingModel.attributes.value,
+        previousTimezone = settingModel._previousAttributes.value,
+        timezoneOffsetDiff = moment.tz(previousTimezone).utcOffset() - moment.tz(newTimezone).utcOffset();
 
     // CASE: TZ was updated, but did not change
     if (previousTimezone === newTimezone) {
@@ -46,7 +87,7 @@ events.on('settings.timezone.edited', function (settingModel, options) {
 
                 return sequence(results.map(function (post) {
                     return function reschedulePostIfPossible() {
-                        const newPublishedAtMoment = moment(post.get('published_at')).add(timezoneOffsetDiff, 'minutes');
+                        var newPublishedAtMoment = moment(post.get('published_at')).add(timezoneOffsetDiff, 'minutes');
 
                         /**
                          * CASE:
@@ -69,14 +110,14 @@ events.on('settings.timezone.edited', function (settingModel, options) {
                     };
                 })).each(function (result) {
                     if (!result.isFulfilled()) {
-                        logging.error(new errors.GhostError({
+                        common.logging.error(new common.errors.GhostError({
                             err: result.reason()
                         }));
                     }
                 });
             })
             .catch(function (err) {
-                logging.error(new errors.GhostError({
+                common.logging.error(new common.errors.GhostError({
                     err: err,
                     level: 'critical'
                 }));
@@ -89,10 +130,10 @@ events.on('settings.timezone.edited', function (settingModel, options) {
  * No transaction, because notifications are not sensitive and we would have to add `forUpdate`
  * to the settings model to create real lock.
  */
-events.on('settings.notifications.edited', function (settingModel) {
-    let allNotifications = JSON.parse(settingModel.attributes.value || []);
-    const options = {context: {internal: true}};
-    let skip = true;
+common.events.on('settings.notifications.edited', function (settingModel) {
+    var allNotifications = JSON.parse(settingModel.attributes.value || []),
+        options = {context: {internal: true}},
+        skip = true;
 
     allNotifications = allNotifications.filter(function (notification) {
         // Do not delete the release notification
@@ -116,6 +157,6 @@ events.on('settings.notifications.edited', function (settingModel) {
         key: 'notifications',
         value: JSON.stringify(allNotifications)
     }, options).catch(function (err) {
-        errors.logError(err);
+        common.errors.logError(err);
     });
 });

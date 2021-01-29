@@ -1,15 +1,21 @@
-const _ = require('lodash');
-const debug = require('ghost-ignition').debug('services:routing:controllers:rss');
-const url = require('url');
-const security = require('@tryghost/security');
-const settingsCache = require('../../../../server/services/settings/cache');
-const rssService = require('../../rss');
-const helpers = require('../helpers');
+const _ = require('lodash'),
+    debug = require('ghost-ignition').debug('services:routing:controllers:rss'),
+    url = require('url'),
+    common = require('../../../../server/lib/common'),
+    security = require('../../../../server/lib/security'),
+    settingsCache = require('../../../../server/services/settings/cache'),
+    rssService = require('../../rss'),
+    helpers = require('../helpers');
+
+// @TODO: move to services/url/utils
+function getBaseUrlForRSSReq(originalUrl, pageParam) {
+    return url.parse(originalUrl).pathname.replace(new RegExp('/' + pageParam + '/$'), '/');
+}
 
 // @TODO: is this really correct? Should we be using meta data title?
 function getTitle(relatedData) {
     relatedData = relatedData || {};
-    let titleStart = _.get(relatedData, 'author[0].name') || _.get(relatedData, 'tag[0].name') || '';
+    var titleStart = _.get(relatedData, 'author[0].name') || _.get(relatedData, 'tag[0].name') || '';
 
     titleStart += titleStart ? ' - ' : '';
     return titleStart + settingsCache.get('title');
@@ -27,13 +33,13 @@ module.exports = function rssController(req, res, next) {
     debug('rssController');
 
     const pathOptions = {
-        page: 1, // required for fetchData
+        page: req.params.page !== undefined ? req.params.page : 1,
         slug: req.params.slug ? security.string.safe(req.params.slug) : undefined
     };
 
-    // CASE: Ghost is using an rss cache - normalize the URL for use as a key
+    // CASE: Ghost is using an rss cache - we have to normalise the (without pagination)
     // @TODO: This belongs to the rss service O_o
-    const baseUrl = url.parse(req.originalUrl).pathname;
+    const baseUrl = getBaseUrlForRSSReq(req.originalUrl, pathOptions.page);
 
     helpers.fetchData(pathOptions, res.routerOptions, res.locals)
         .then(function formatResult(result) {
@@ -45,6 +51,13 @@ module.exports = function rssController(req, res, next) {
             return response;
         })
         .then(function (data) {
+            // CASE: if requested page is greater than number of pages we have
+            if (pathOptions.page > data.meta.pagination.pages) {
+                return next(new common.errors.NotFoundError({
+                    message: common.i18n.t('errors.errors.pageNotFound')
+                }));
+            }
+
             return rssService.render(res, baseUrl, data);
         })
         .catch(helpers.handleError(next));

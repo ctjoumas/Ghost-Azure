@@ -1,7 +1,28 @@
-const {createAddColumnMigration} = require('../../utils');
+const commands = require('../../../schema').commands;
 
-module.exports = createAddColumnMigration('members', 'name', {
-    type: 'string',
-    maxlength: 191,
-    nullable: true
-});
+module.exports = {
+
+    up: commands.createColumnMigration({
+        table: 'members',
+        column: 'name',
+        dbIsInCorrectState(hasColumn) {
+            return hasColumn === true;
+        },
+        operation: commands.addColumn,
+        operationVerb: 'Adding'
+    }),
+
+    down: commands.createColumnMigration({
+        table: 'members',
+        column: 'name',
+        dbIsInCorrectState(hasColumn) {
+            return hasColumn === false;
+        },
+        operation: commands.dropColumn,
+        operationVerb: 'Dropping'
+    }),
+
+    config: {
+        transaction: true
+    }
+};

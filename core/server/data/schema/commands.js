@@ -1,13 +1,12 @@
-const _ = require('lodash');
-const Promise = require('bluebird');
-const {i18n} = require('../../lib/common');
-const logging = require('../../../shared/logging');
-const db = require('../db');
-const schema = require('./schema');
-const clients = require('./clients');
+var _ = require('lodash'),
+    Promise = require('bluebird'),
+    common = require('../../lib/common'),
+    db = require('../db'),
+    schema = require('./schema'),
+    clients = require('./clients');
 
 function addTableColumn(tableName, table, columnName, columnSpec = schema[tableName][columnName]) {
-    let column;
+    var column;
 
     // creation distinguishes between text with fieldtype, string with maxlength and all others
     if (columnSpec.type === 'text' && Object.prototype.hasOwnProperty.call(columnSpec, 'fieldtype')) {
@@ -40,9 +39,6 @@ function addTableColumn(tableName, table, columnName, columnSpec = schema[tableN
         // check if table exists?
         column.references(columnSpec.references);
     }
-    if (Object.prototype.hasOwnProperty.call(columnSpec, 'cascadeDelete') && columnSpec.cascadeDelete === true) {
-        column.onDelete('CASCADE');
-    }
     if (Object.prototype.hasOwnProperty.call(columnSpec, 'defaultTo')) {
         column.defaultTo(columnSpec.defaultTo);
     }
@@ -57,20 +53,20 @@ function addColumn(tableName, column, transaction, columnSpec) {
     });
 }
 
-function dropColumn(tableName, column, transaction) {
-    return (transaction || db.knex).schema.table(tableName, function (table) {
+function dropColumn(table, column, transaction) {
+    return (transaction || db.knex).schema.table(table, function (table) {
         table.dropColumn(column);
     });
 }
 
-function addUnique(tableName, column, transaction) {
-    return (transaction || db.knex).schema.table(tableName, function (table) {
+function addUnique(table, column, transaction) {
+    return (transaction || db.knex).schema.table(table, function (table) {
         table.unique(column);
     });
 }
 
-function dropUnique(tableName, column, transaction) {
-    return (transaction || db.knex).schema.table(tableName, function (table) {
+function dropUnique(table, column, transaction) {
+    return (transaction || db.knex).schema.table(table, function (table) {
         table.dropUnique(column);
     });
 }
@@ -87,20 +83,9 @@ function createTable(table, transaction) {
             }
 
             return (transaction || db.knex).schema.createTable(table, function (t) {
-                let tableIndexes = [];
-
-                const columnKeys = _.keys(schema[table]);
+                var columnKeys = _.keys(schema[table]);
                 _.each(columnKeys, function (column) {
-                    if (column === '@@INDEXES@@') {
-                        tableIndexes = schema[table]['@@INDEXES@@'];
-                        return;
-                    }
-
                     return addTableColumn(table, t, column);
-                });
-
-                _.each(tableIndexes, function (index) {
-                    t.index(index);
                 });
             });
         });
@@ -111,44 +96,44 @@ function deleteTable(table, transaction) {
 }
 
 function getTables(transaction) {
-    const client = (transaction || db.knex).client.config.client;
+    var client = (transaction || db.knex).client.config.client;
 
     if (_.includes(_.keys(clients), client)) {
         return clients[client].getTables(transaction);
     }
 
-    return Promise.reject(i18n.t('notices.data.utils.index.noSupportForDatabase', {client: client}));
+    return Promise.reject(common.i18n.t('notices.data.utils.index.noSupportForDatabase', {client: client}));
 }
 
 function getIndexes(table, transaction) {
-    const client = (transaction || db.knex).client.config.client;
+    var client = (transaction || db.knex).client.config.client;
 
     if (_.includes(_.keys(clients), client)) {
         return clients[client].getIndexes(table, transaction);
     }
 
-    return Promise.reject(i18n.t('notices.data.utils.index.noSupportForDatabase', {client: client}));
+    return Promise.reject(common.i18n.t('notices.data.utils.index.noSupportForDatabase', {client: client}));
 }
 
 function getColumns(table, transaction) {
-    const client = (transaction || db.knex).client.config.client;
+    var client = (transaction || db.knex).client.config.client;
 
     if (_.includes(_.keys(clients), client)) {
         return clients[client].getColumns(table);
     }
 
-    return Promise.reject(i18n.t('notices.data.utils.index.noSupportForDatabase', {client: client}));
+    return Promise.reject(common.i18n.t('notices.data.utils.index.noSupportForDatabase', {client: client}));
 }
 
 function checkTables(transaction) {
-    const client = (transaction || db.knex).client.config.client;
+    var client = (transaction || db.knex).client.config.client;
 
     if (client === 'mysql') {
         return clients[client].checkPostTable();
     }
 }
 
-const createLog = type => msg => logging[type](msg);
+const createLog = type => msg => common.logging[type](msg);
 
 function createColumnMigration(...migrations) {
     async function runColumnMigration(conn, migration) {
@@ -164,16 +149,18 @@ function createColumnMigration(...migrations) {
         const hasColumn = await conn.schema.hasColumn(table, column);
         const isInCorrectState = dbIsInCorrectState(hasColumn);
 
-        const log = createLog(isInCorrectState ? 'warn' : 'info');
+        const log = createLog(isInCorrectState ? 'info' : 'warn');
 
-        log(`${operationVerb} ${table}.${column} column`);
+        log(`${operationVerb} ${table}.${column}`);
 
         if (!isInCorrectState) {
             await operation(table, column, conn, columnDefinition);
         }
     }
 
-    return async function columnMigration(conn) {
+    return async function columnMigration(options) {
+        const conn = options.transacting || options.connection;
+
         for (const migration of migrations) {
             await runColumnMigration(conn, migration);
         }

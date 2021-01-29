@@ -1,14 +1,13 @@
 const debug = require('ghost-ignition').debug('web:v2:admin:app');
 const boolParser = require('express-query-boolean');
-const express = require('../../../../../shared/express');
+const express = require('express');
 const bodyParser = require('body-parser');
 const shared = require('../../../shared');
-const apiMw = require('../../middleware');
 const routes = require('./routes');
 
 module.exports = function setupApiApp() {
     debug('Admin API v2 setup start');
-    const apiApp = express('v2 admin');
+    const apiApp = express();
 
     // API middleware
 
@@ -24,7 +23,7 @@ module.exports = function setupApiApp() {
 
     // Check version matches for API requests, depends on res.locals.safeVersion being set
     // Therefore must come after themeHandler.ghostLocals, for now
-    apiApp.use(apiMw.versionMatch);
+    apiApp.use(shared.middlewares.api.versionMatch);
 
     // Admin API shouldn't be cached
     apiApp.use(shared.middlewares.cacheControl('private'));

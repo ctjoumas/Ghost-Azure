@@ -1,7 +1,7 @@
 const ghostBookshelf = require('./base');
 
-let Permission;
-let Permissions;
+let Permission,
+    Permissions;
 
 Permission = ghostBookshelf.Model.extend({
 
@@ -33,6 +33,10 @@ Permission = ghostBookshelf.Model.extend({
 
     users: function users() {
         return this.belongsToMany('User');
+    },
+
+    apps: function apps() {
+        return this.belongsToMany('App');
     }
 });
 

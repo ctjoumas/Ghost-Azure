@@ -1,10 +1,10 @@
-const express = require('../../../../../shared/express');
+const express = require('express');
 const cors = require('cors');
 const apiv2 = require('../../../../api/v2');
 const mw = require('./middleware');
 
 module.exports = function apiRoutes() {
-    const router = express.Router('v2 content');
+    const router = express.Router();
 
     router.use(cors());
 

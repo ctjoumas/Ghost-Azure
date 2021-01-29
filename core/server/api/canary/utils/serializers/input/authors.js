@@ -1,13 +1,8 @@
 const debug = require('ghost-ignition').debug('api:canary:utils:serializers:input:authors');
-const slugFilterOrder = require('./utils/slug-filter-order');
 const utils = require('../../index');
 
 function setDefaultOrder(frame) {
-    if (!frame.options.order && frame.options.filter) {
-        frame.options.autoOrder = slugFilterOrder('users', frame.options.filter);
-    }
-
-    if (!frame.options.order && !frame.options.autoOrder) {
+    if (!frame.options.order) {
         frame.options.order = 'name asc';
     }
 }

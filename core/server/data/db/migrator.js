@@ -1,14 +1,12 @@
-const KnexMigrator = require('knex-migrator');
-const config = require('../../../shared/config');
-const errors = require('@tryghost/errors');
-
-const knexMigrator = new KnexMigrator({
-    knexMigratorFilePath: config.get('paths:appRoot')
-});
+const KnexMigrator = require('knex-migrator'),
+    config = require('../../config'),
+    common = require('../../lib/common'),
+    knexMigrator = new KnexMigrator({
+        knexMigratorFilePath: config.get('paths:appRoot')
+    });
 
 module.exports.getState = () => {
-    let state;
-    let err;
+    let state, err;
 
     return knexMigrator.isDatabaseOK()
         .then(() => {
@@ -56,11 +54,11 @@ module.exports.isDbCompatible = (connection) => {
                 return;
             }
 
-            throw new errors.DatabaseVersionError({
+            throw new common.errors.DatabaseVersionError({
                 message: 'Your database version is not compatible with Ghost 2.0.',
                 help: 'Want to keep your DB? Use Ghost < 1.0.0 or the "0.11" branch.' +
                       '\n\n\n' +
-                      'Want to migrate Ghost 0.11 to 2.0? Please visit https://ghost.org/docs/update/'
+                      'Want to migrate Ghost 0.11 to 2.0? Please visit https://ghost.org/faq/upgrade-to-ghost-1-0/'
             });
         })
         .catch((err) => {

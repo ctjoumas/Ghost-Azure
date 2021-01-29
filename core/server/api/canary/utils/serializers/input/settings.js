@@ -1,36 +1,14 @@
 const _ = require('lodash');
 const url = require('./utils/url');
-const typeGroupMapper = require('../../../../shared/serializers/input/utils/settings-filter-type-group-mapper');
-const settingsCache = require('../../../../../services/settings/cache');
 
 module.exports = {
-    browse(apiConfig, frame) {
-        if (frame.options.type) {
-            let mappedGroupOptions = typeGroupMapper(frame.options.type);
-
-            if (frame.options.group) {
-                frame.options.group = `${frame.options.group},${mappedGroupOptions}`;
-            } else {
-                frame.options.group = mappedGroupOptions;
-            }
-        }
-    },
-
     read(apiConfig, frame) {
-        if (frame.options.key === 'ghost_head') {
-            frame.options.key = 'codeinjection_head';
+        if (frame.options.key === 'codeinjection_head') {
+            frame.options.key = 'ghost_head';
         }
 
-        if (frame.options.key === 'ghost_foot') {
-            frame.options.key = 'codeinjection_foot';
-        }
-
-        if (frame.options.key === 'active_timezone') {
-            frame.options.key = 'timezone';
-        }
-
-        if (frame.options.key === 'default_locale') {
-            frame.options.key = 'lang';
+        if (frame.options.key === 'codeinjection_foot') {
+            frame.options.key = 'ghost_foot';
         }
     },
 
@@ -39,26 +17,11 @@ module.exports = {
         if (_.isString(frame.data)) {
             frame.data = {settings: [{key: frame.data, value: frame.options}]};
         }
-        const settings = settingsCache.getAll();
-
-        // Ignore and drop all values with Read-only flag
-        frame.data.settings = frame.data.settings.filter((setting) => {
-            const settingFlagsStr = settings[setting.key] ? settings[setting.key].flags : '';
-            const settingFlagsArr = settingFlagsStr ? settingFlagsStr.split(',') : [];
-            return !settingFlagsArr.includes('RO');
-        });
-
-        frame.data.settings = frame.data.settings.filter((setting) => {
-            return setting.key !== 'bulk_email_settings';
-        });
 
         frame.data.settings.forEach((setting) => {
             // CASE: transform objects/arrays into string (we store stringified objects in the db)
             // @TODO: This belongs into the model layer. We should stringify before saving and parse when fetching from db.
             // @TODO: Fix when dropping v0.1
-            const settingType = settings[setting.key] ? settings[setting.key].type : '';
-
-            //TODO: Needs to be removed once we get rid of all `object` type settings
             if (_.isObject(setting.value)) {
                 setting.value = JSON.stringify(setting.value);
             }
@@ -66,34 +29,33 @@ module.exports = {
             // @TODO: handle these transformations in a centralised API place (these rules should apply for ALL resources)
 
             // CASE: Ensure we won't forward strings, otherwise model events or model interactions can fail
-            if (settingType === 'boolean' && (setting.value === '0' || setting.value === '1')) {
+            if (setting.value === '0' || setting.value === '1') {
                 setting.value = !!+setting.value;
             }
 
             // CASE: Ensure we won't forward strings, otherwise model events or model interactions can fail
-            if (settingType === 'boolean' && (setting.value === 'false' || setting.value === 'true')) {
+            if (setting.value === 'false' || setting.value === 'true') {
                 setting.value = setting.value === 'true';
             }
 
-            if (setting.key === 'ghost_head') {
-                setting.key = 'codeinjection_head';
+            if (setting.key === 'codeinjection_head') {
+                setting.key = 'ghost_head';
             }
 
-            if (setting.key === 'ghost_foot') {
-                setting.key = 'codeinjection_foot';
+            if (setting.key === 'codeinjection_foot') {
+                setting.key = 'ghost_foot';
             }
 
-            if (setting.key === 'active_timezone') {
-                setting.key = 'timezone';
-            }
-
-            if (setting.key === 'default_locale') {
-                setting.key = 'lang';
-            }
-
-            if (['cover_image', 'icon', 'logo', 'portal_button_icon'].includes(setting.key)) {
+            if (['cover_image', 'icon', 'logo'].includes(setting.key)) {
                 setting = url.forSetting(setting);
             }
         });
+
+        // CASE: deprecated, won't accept
+        const index = _.findIndex(frame.data.settings, {key: 'force_i18n'});
+
+        if (index !== -1) {
+            frame.data.settings.splice(index, 1);
+        }
     }
 };

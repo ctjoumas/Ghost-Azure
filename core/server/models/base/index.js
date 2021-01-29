@@ -3,29 +3,25 @@
 // several basic behaviours such as UUIDs, as well as a set of Data methods for accessing information from the database.
 //
 // The models are internal to Ghost, only the API and some internal functions such as migration and import/export
-// accesses the models directly.
+// accesses the models directly. All other parts of Ghost, including the blog frontend, admin UI, and apps are only
+// allowed to access data via the API.
+const _ = require('lodash'),
+    bookshelf = require('bookshelf'),
+    moment = require('moment'),
+    Promise = require('bluebird'),
+    ObjectId = require('bson-objectid'),
+    debug = require('ghost-ignition').debug('models:base'),
+    config = require('../../config'),
+    db = require('../../data/db'),
+    common = require('../../lib/common'),
+    security = require('../../lib/security'),
+    schema = require('../../data/schema'),
+    urlUtils = require('../../lib/url-utils'),
+    validation = require('../../data/validation'),
+    plugins = require('../plugins');
 
-// All other parts of Ghost, including the frontend & admin UI are only allowed to access data via the API.
-const _ = require('lodash');
-
-const bookshelf = require('bookshelf');
-const moment = require('moment');
-const Promise = require('bluebird');
-const ObjectId = require('bson-objectid');
-const debug = require('ghost-ignition').debug('models:base');
-const config = require('../../../shared/config');
-const db = require('../../data/db');
-const {events, i18n} = require('../../lib/common');
-const logging = require('../../../shared/logging');
-const errors = require('@tryghost/errors');
-const security = require('@tryghost/security');
-const schema = require('../../data/schema');
-const urlUtils = require('../../../shared/url-utils');
-const validation = require('../../data/validation');
-const bulkOperations = require('./bulk-operations');
-const plugins = require('../plugins');
-let ghostBookshelf;
-let proto;
+let ghostBookshelf,
+    proto;
 
 // ### ghostBookshelf
 // Initializes a new Bookshelf instance called ghostBookshelf, for reference elsewhere in Ghost.
@@ -34,22 +30,11 @@ ghostBookshelf = bookshelf(db.knex);
 // Load the Bookshelf registry plugin, which helps us avoid circular dependencies
 ghostBookshelf.plugin('registry');
 
-ghostBookshelf.plugin(plugins.eagerLoad);
-
 // Add committed/rollback events.
 ghostBookshelf.plugin(plugins.transactionEvents);
 
-// Load the Ghost custom-query plugin, which applying a custom query to findPage requests
-ghostBookshelf.plugin(plugins.customQuery);
-
 // Load the Ghost filter plugin, which handles applying a 'filter' to findPage requests
 ghostBookshelf.plugin(plugins.filter);
-
-// Load the Ghost filter plugin, which handles applying a 'order' to findPage requests
-ghostBookshelf.plugin(plugins.order);
-
-// Load the Ghost search plugin, which handles applying a search query to findPage requests
-ghostBookshelf.plugin(plugins.search);
 
 // Load the Ghost include count plugin, which allows for the inclusion of cross-table counts
 ghostBookshelf.plugin(plugins.includeCount);
@@ -73,7 +58,7 @@ ghostBookshelf.plugin('bookshelf-relations', {
         belongsToMany: {
             after: function (existing, targets, options) {
                 // reorder tags/authors
-                const queryOptions = {
+                var queryOptions = {
                     query: {
                         where: {}
                     }
@@ -124,10 +109,10 @@ const addAction = (model, event, options) => {
         return;
     }
 
-    const existingAction = model.getAction(event, options);
+    const action = model.getAction(event, options);
 
     // CASE: model does not support action for target event
-    if (!existingAction) {
+    if (!action) {
         return;
     }
 
@@ -139,7 +124,7 @@ const addAction = (model, event, options) => {
                     err = err[0];
                 }
 
-                logging.error(new errors.InternalServerError({
+                common.logging.error(new common.errors.InternalServerError({
                     err
                 }));
             });
@@ -151,10 +136,10 @@ const addAction = (model, event, options) => {
                 return;
             }
 
-            insert(existingAction);
+            insert(action);
         });
     } else {
-        insert(existingAction);
+        insert(action);
     }
 };
 
@@ -172,15 +157,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
     // Ghost option handling - get permitted attributes from server/data/schema.js, where the DB schema is defined
     permittedAttributes: function permittedAttributes() {
-        return _.keys(schema.tables[this.tableName])
-            .filter(key => key.indexOf('@@') === -1);
-    },
-
-    // Ghost ordering handling, allows to order by permitted attributes by default and can be overriden on specific model level
-    orderAttributes: function orderAttributes() {
-        return Object.keys(schema.tables[this.tableName])
-            .map(key => `${this.tableName}.${key}`)
-            .filter(key => key.indexOf('@@') === -1);
+        return _.keys(schema.tables[this.tableName]);
     },
 
     // When loading an instance, subclasses can specify default to fetch
@@ -195,15 +172,15 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * If the query runs in a txn, `_previousAttributes` will be empty.
      */
     emitChange: function (model, event, options) {
-        const _emit = (ghostEvent, _model, opts) => {
-            if (!_model.wasChanged()) {
+        const _emit = (ghostEvent, model, opts) => {
+            if (!model.wasChanged()) {
                 return;
             }
 
-            debug(_model.tableName, ghostEvent);
+            debug(model.tableName, ghostEvent);
 
             // @NOTE: Internal Ghost events. These are very granular e.g. post.published
-            events.emit(ghostEvent, _model, opts);
+            common.events.emit(ghostEvent, model, opts);
         };
 
         if (!options.transacting) {
@@ -244,7 +221,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
     // Bookshelf `initialize` - declare a constructor-like method for model creation
     initialize: function initialize() {
-        const self = this;
+        var self = this;
 
         // NOTE: triggered before `creating`/`updating`
         this.on('saving', function onSaving(newObj, attrs, options) {
@@ -356,7 +333,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                  *
                  * Happens after validation to ensure we don't set fields which are not nullable on db level.
                  */
-                _.each(Object.keys(schema.tables[this.tableName]).filter(key => key.indexOf('@@') === -1), (columnKey) => {
+                _.each(Object.keys(schema.tables[this.tableName]), (columnKey) => {
                     if (model.get(columnKey) === undefined) {
                         model.set(columnKey, null);
                     }
@@ -451,7 +428,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * date format is now in each db the same
      */
     fixDatesWhenSave: function fixDates(attrs) {
-        const self = this;
+        var self = this;
 
         _.each(attrs, function each(value, key) {
             if (value !== null
@@ -473,8 +450,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      *   - knex wraps the UTC value into a local JS Date
      */
     fixDatesWhenFetch: function fixDates(attrs) {
-        const self = this;
-        let dateMoment;
+        var self = this, dateMoment;
 
         _.each(attrs, function each(value, key) {
             if (value !== null
@@ -497,7 +473,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
     // Convert integers to real booleans
     fixBools: function fixBools(attrs) {
-        const self = this;
+        var self = this;
         _.each(attrs, function each(value, key) {
             if (Object.prototype.hasOwnProperty.call(schema.tables[self.tableName], key)
                 && schema.tables[self.tableName][key].type === 'bool') {
@@ -579,8 +555,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         } else if (options.context.external) {
             return ghostBookshelf.Model.externalUser;
         } else {
-            throw new errors.NotFoundError({
-                message: i18n.t('errors.models.base.index.missingContext'),
+            throw new common.errors.NotFoundError({
+                message: common.i18n.t('errors.models.base.index.missingContext'),
                 level: 'critical'
             });
         }
@@ -609,15 +585,6 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         const options = ghostBookshelf.Model.filterOptions(unfilteredOptions, 'toJSON');
         options.omitPivot = true;
 
-        /**
-         * removes null relations coming from `hasOne` - https://bookshelfjs.org/api.html#Model-instance-hasOne
-         * Based on https://github.com/bookshelf/bookshelf/issues/72#issuecomment-25164617
-         */
-        _.each(this.relations, (value, key) => {
-            if (_.isEmpty(value)) {
-                delete this.relations[key];
-            }
-        });
         // CASE: get JSON of previous attrs
         if (options.previous) {
             const clonedModel = _.cloneDeep(this);
@@ -706,11 +673,11 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         case 'edit':
             return baseOptions.concat(extraOptions, ['id', 'require']);
         case 'findOne':
-            return baseOptions.concat(extraOptions, ['columns', 'require', 'mongoTransformer']);
+            return baseOptions.concat(extraOptions, ['columns', 'require']);
         case 'findAll':
-            return baseOptions.concat(extraOptions, ['filter', 'columns', 'mongoTransformer']);
+            return baseOptions.concat(extraOptions, ['filter', 'columns']);
         case 'findPage':
-            return baseOptions.concat(extraOptions, ['filter', 'order', 'autoOrder', 'page', 'limit', 'columns', 'mongoTransformer']);
+            return baseOptions.concat(extraOptions, ['filter', 'order', 'page', 'limit', 'columns']);
         default:
             return baseOptions.concat(extraOptions);
         }
@@ -724,9 +691,9 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Object} The filtered results of the passed in data, containing only what's allowed in the schema.
      */
     filterData: function filterData(data) {
-        const permittedAttributes = this.prototype.permittedAttributes();
-        const filteredData = _.pick(data, permittedAttributes);
-        const sanitizedData = this.sanitizeData(filteredData);
+        var permittedAttributes = this.prototype.permittedAttributes(),
+            filteredData = _.pick(data, permittedAttributes),
+            sanitizedData = this.sanitizeData(filteredData);
 
         return sanitizedData;
     },
@@ -753,8 +720,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * Sanitize relations.
      */
     sanitizeData: function sanitizeData(data) {
-        const tableName = _.result(this.prototype, 'tableName');
-        let date;
+        var tableName = _.result(this.prototype, 'tableName'), date;
 
         _.each(data, (value, property) => {
             if (value !== null
@@ -766,8 +732,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
                 // CASE: client sends `0000-00-00 00:00:00`
                 if (isNaN(date)) {
-                    throw new errors.ValidationError({
-                        message: i18n.t('errors.models.base.invalidDate', {key: property}),
+                    throw new common.errors.ValidationError({
+                        message: common.i18n.t('errors.models.base.invalidDate', {key: property}),
                         code: 'DATE_INVALID'
                     });
                 }
@@ -776,30 +742,24 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             }
 
             if (this.prototype.relationships && this.prototype.relationships.indexOf(property) !== -1) {
-                let relations = data[property];
-
-                // CASE: 1:1 relation will have single data point
-                if (!_.isArray(data[property])) {
-                    relations = [data[property]];
-                }
-                _.each(relations, (relation, indexInArr) => {
-                    _.each(relation, (relationValue, relationProperty) => {
-                        if (relationValue !== null
+                _.each(data[property], (relation, indexInArr) => {
+                    _.each(relation, (value, relationProperty) => {
+                        if (value !== null
                             && Object.prototype.hasOwnProperty.call(schema.tables[this.prototype.relationshipBelongsTo[property]], relationProperty)
                             && schema.tables[this.prototype.relationshipBelongsTo[property]][relationProperty].type === 'dateTime'
-                            && typeof relationValue === 'string'
+                            && typeof value === 'string'
                         ) {
-                            date = new Date(relationValue);
+                            date = new Date(value);
 
                             // CASE: client sends `0000-00-00 00:00:00`
                             if (isNaN(date)) {
-                                throw new errors.ValidationError({
-                                    message: i18n.t('errors.models.base.invalidDate', {key: relationProperty}),
+                                throw new common.errors.ValidationError({
+                                    message: common.i18n.t('errors.models.base.invalidDate', {key: relationProperty}),
                                     code: 'DATE_INVALID'
                                 });
                             }
 
-                            data[property][indexInArr][relationProperty] = moment(relationValue).toDate();
+                            data[property][indexInArr][relationProperty] = moment(value).toDate();
                         }
                     });
                 });
@@ -820,14 +780,14 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         filterConfig = filterConfig || {};
 
         if (Object.prototype.hasOwnProperty.call(unfilteredOptions, 'include')) {
-            throw new errors.IncorrectUsageError({
+            throw new common.errors.IncorrectUsageError({
                 message: 'The model layer expects using `withRelated`.'
             });
         }
 
-        let options = _.cloneDeep(unfilteredOptions);
-        const extraAllowedProperties = filterConfig.extraAllowedProperties || [];
-        let permittedOptions;
+        var options = _.cloneDeep(unfilteredOptions),
+            extraAllowedProperties = filterConfig.extraAllowedProperties || [],
+            permittedOptions;
 
         permittedOptions = this.permittedOptions(methodName, options);
         permittedOptions = _.union(permittedOptions, extraAllowedProperties);
@@ -842,35 +802,6 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
     // ## Model Data Functions
 
-    getFilteredCollection: function getFilteredCollection(options) {
-        const filteredCollection = this.forge();
-
-        // Apply model-specific query behaviour
-        filteredCollection.applyCustomQuery(options);
-
-        // Add Filter behaviour
-        filteredCollection.applyDefaultAndCustomFilters(options);
-
-        // Apply model-specific search behaviour
-        filteredCollection.applySearchQuery(options);
-
-        return filteredCollection;
-    },
-
-    getFilteredCollectionQuery: function getFilteredCollectionQuery(options) {
-        const filteredCollection = this.getFilteredCollection(options);
-        const filteredCollectionQuery = filteredCollection.query();
-
-        if (options.transacting) {
-            filteredCollectionQuery.transacting(options.transacting);
-            if (options.forUpdate) {
-                filteredCollectionQuery.forUpdate();
-            }
-        }
-
-        return filteredCollectionQuery;
-    },
-
     /**
      * ### Find All
      * Fetches all the data for a particular model
@@ -878,8 +809,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Promise(ghostBookshelf.Collection)} Collection of all Models
      */
     findAll: function findAll(unfilteredOptions) {
-        const options = this.filterOptions(unfilteredOptions, 'findAll');
-        const itemCollection = this.getFilteredCollection(options);
+        var options = this.filterOptions(unfilteredOptions, 'findAll'),
+            itemCollection = this.forge();
 
         // @TODO: we can't use order raw when running migrations (see https://github.com/tgriesser/knex/issues/2763)
         if (this.orderDefaultRaw && !options.migrating) {
@@ -888,6 +819,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             });
         }
 
+        itemCollection.applyDefaultAndCustomFilters(options);
         return itemCollection.fetchAll(options).then(function then(result) {
             if (options.withRelated) {
                 _.each(result.models, function each(item) {
@@ -924,12 +856,15 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @param {Object} unfilteredOptions
      */
     findPage: function findPage(unfilteredOptions) {
-        const options = this.filterOptions(unfilteredOptions, 'findPage');
-        const itemCollection = this.getFilteredCollection(options);
-        const requestedColumns = options.columns;
+        var options = this.filterOptions(unfilteredOptions, 'findPage'),
+            itemCollection = this.forge(),
+            requestedColumns = options.columns;
 
         // Set this to true or pass ?debug=true as an API option to get output
-        itemCollection.debug = unfilteredOptions.debug && config.get('env') !== 'production';
+        itemCollection.debug = options.debug && config.get('env') !== 'production';
+
+        // Add Filter behaviour
+        itemCollection.applyDefaultAndCustomFilters(options);
 
         // Ensure only valid fields/columns are added to query
         // and append default columns to fetch
@@ -939,12 +874,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         }
 
         if (options.order) {
-            const {order, orderRaw, eagerLoad} = itemCollection.parseOrderOption(options.order, options.withRelated);
-            options.orderRaw = orderRaw;
-            options.order = order;
-            options.eagerLoad = eagerLoad;
-        } else if (options.autoOrder) {
-            options.orderRaw = options.autoOrder;
+            options.order = this.parseOrderOption(options.order, options.withRelated);
         } else if (this.orderDefaultRaw) {
             options.orderRaw = this.orderDefaultRaw(options);
         } else if (this.orderDefaultOptions) {
@@ -968,8 +898,6 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                 data: data,
                 meta: {pagination: response.pagination}
             };
-        }).catch((err) => {
-            throw err;
         });
     },
 
@@ -1034,7 +962,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                     return object.save(data, options);
                 }
 
-                throw new errors.NotFoundError();
+                throw new common.errors.NotFoundError();
             });
     },
 
@@ -1046,8 +974,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Promise(ghostBookshelf.Model)} Newly Added Model
      */
     add: function add(data, unfilteredOptions) {
-        const options = this.filterOptions(unfilteredOptions, 'add');
-        let model;
+        var options = this.filterOptions(unfilteredOptions, 'add'),
+            model;
 
         data = this.filterData(data);
         model = this.forge(data);
@@ -1062,12 +990,6 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         // Ghost auto-generates Object id's, so we need to tell Bookshelf here that we are inserting data
         options.method = 'insert';
         return model.save(null, options);
-    },
-
-    bulkAdd: function bulkAdd(data, tableName) {
-        tableName = tableName || this.prototype.tableName;
-
-        return bulkOperations.insert(tableName, data);
     },
 
     /**
@@ -1093,12 +1015,6 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             });
     },
 
-    bulkDestroy: function bulkDestroy(data, tableName) {
-        tableName = tableName || this.prototype.tableName;
-
-        return bulkOperations.del(tableName, data);
-    },
-
     /**
      * ### Generate Slug
      * Create a string to act as the permalink for an object.
@@ -1108,15 +1024,14 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
      * @return {Promise(String)} Resolves to a unique slug string
      */
     generateSlug: function generateSlug(Model, base, options) {
-        let slug;
-        let slugTryCount = 1;
-        const baseName = Model.prototype.tableName.replace(/s$/, '');
+        var slug,
+            slugTryCount = 1,
+            baseName = Model.prototype.tableName.replace(/s$/, ''),
+            // Look for a matching slug, append an incrementing number if so
+            checkIfSlugExists, longSlug;
 
-        let longSlug;
-
-        // Look for a matching slug, append an incrementing number if so
-        const checkIfSlugExists = function checkIfSlugExists(slugToFind) {
-            const args = {slug: slugToFind};
+        checkIfSlugExists = function checkIfSlugExists(slugToFind) {
+            var args = {slug: slugToFind};
 
             // status is needed for posts
             if (options && options.status) {
@@ -1124,7 +1039,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
             }
 
             return Model.findOne(args, options).then(function then(found) {
-                let trimSpace;
+                var trimSpace;
 
                 if (!found) {
                     return slugToFind;
@@ -1182,7 +1097,8 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
         }
 
         // Some keywords cannot be changed
-        slug = _.includes(urlUtils.getProtectedSlugs(), slug) ? slug + '-' + baseName : slug;
+        const slugList = _.union(config.get('slugs').reserved, urlUtils.getProtectedSlugs());
+        slug = _.includes(slugList, slug) ? slug + '-' + baseName : slug;
 
         // if slug is empty after trimming use the model name
         if (!slug) {
@@ -1191,6 +1107,39 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
         // Test for duplicate slugs.
         return checkIfSlugExists(slug);
+    },
+
+    parseOrderOption: function (order, withRelated) {
+        var permittedAttributes, result, rules;
+
+        permittedAttributes = this.prototype.permittedAttributes();
+        if (withRelated && withRelated.indexOf('count.posts') > -1) {
+            permittedAttributes.push('count.posts');
+        }
+        result = {};
+        rules = order.split(',');
+
+        _.each(rules, function (rule) {
+            var match, field, direction;
+
+            match = /^([a-z0-9_.]+)\s+(asc|desc)$/i.exec(rule.trim());
+
+            // invalid order syntax
+            if (!match) {
+                return;
+            }
+
+            field = match[1].toLowerCase();
+            direction = match[2].toUpperCase();
+
+            if (permittedAttributes.indexOf(field) === -1) {
+                return;
+            }
+
+            result[field] = direction;
+        });
+
+        return result;
     },
 
     /**
@@ -1309,34 +1258,34 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                     props[relation.name] = (() => {
                         debug('fetch withRelated', relation.name);
 
-                        let relationQuery = db.knex(relation.targetTable);
+                        let query = db.knex(relation.targetTable);
 
                         // default fields to select
                         _.each(relation.select, (fieldToSelect) => {
-                            relationQuery.select(fieldToSelect);
+                            query.select(fieldToSelect);
                         });
 
                         // custom fields to select
                         _.each(withRelatedFields[withRelatedKey], (toSelect) => {
-                            relationQuery.select(toSelect);
+                            query.select(toSelect);
                         });
 
-                        relationQuery.innerJoin(
+                        query.innerJoin(
                             relation.innerJoin.relation,
                             relation.innerJoin.condition[0],
                             relation.innerJoin.condition[1],
                             relation.innerJoin.condition[2]
                         );
 
-                        relationQuery.whereIn(relation.whereIn, _.map(objects, 'id'));
-                        relationQuery.orderBy(relation.orderBy);
+                        query.whereIn(relation.whereIn, _.map(objects, 'id'));
+                        query.orderBy(relation.orderBy);
 
-                        return relationQuery
-                            .then((queryRelations) => {
+                        return query
+                            .then((relations) => {
                                 debug('fetched withRelated', relation.name);
 
                                 // arr => obj[post_id] = [...] (faster access)
-                                return queryRelations.reduce((obj, item) => {
+                                return relations.reduce((obj, item) => {
                                     if (!obj[item[relation.whereInKey]]) {
                                         obj[item[relation.whereInKey]] = [];
                                     }
@@ -1349,23 +1298,23 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
                 });
 
                 return Promise.props(props)
-                    .then((relationsToAttach) => {
+                    .then((relations) => {
                         debug('attach relations', modelName);
 
                         objects = _.map(objects, (object) => {
-                            _.each(Object.keys(relationsToAttach), (relation) => {
-                                if (!relationsToAttach[relation][object.id]) {
+                            _.each(Object.keys(relations), (relation) => {
+                                if (!relations[relation][object.id]) {
                                     object[relation] = [];
                                     return;
                                 }
 
-                                object[relation] = relationsToAttach[relation][object.id];
+                                object[relation] = relations[relation][object.id];
                             });
 
                             object = ghostBookshelf._models[modelName].prototype.toJSON.bind({
                                 attributes: object,
                                 _originalOptions: {
-                                    withRelated: Object.keys(relationsToAttach)
+                                    withRelated: Object.keys(relations)
                                 },
                                 related: function (key) {
                                     return object[key];

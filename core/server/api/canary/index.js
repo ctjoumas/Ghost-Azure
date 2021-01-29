@@ -14,10 +14,6 @@ module.exports = {
         return shared.pipeline(require('./db'), localUtils);
     },
 
-    get identities() {
-        return shared.pipeline(require('./identities'), localUtils);
-    },
-
     get integrations() {
         return shared.pipeline(require('./integrations'), localUtils);
     },
@@ -71,20 +67,12 @@ module.exports = {
         return shared.pipeline(require('./settings'), localUtils);
     },
 
-    get membersStripeConnect() {
-        return shared.pipeline(require('./membersStripeConnect'), localUtils);
+    get subscribers() {
+        return shared.pipeline(require('./subscribers'), localUtils);
     },
 
     get members() {
         return shared.pipeline(require('./members'), localUtils);
-    },
-
-    get memberSigninUrls() {
-        return shared.pipeline(require('./memberSigninUrls.js'), localUtils);
-    },
-
-    get labels() {
-        return shared.pipeline(require('./labels'), localUtils);
     },
 
     get images() {
@@ -123,20 +111,8 @@ module.exports = {
         return shared.pipeline(require('./actions'), localUtils);
     },
 
-    get email_preview() {
-        return shared.pipeline(require('./email-preview'), localUtils);
-    },
-
-    get emails() {
-        return shared.pipeline(require('./email'), localUtils);
-    },
-
     get site() {
         return shared.pipeline(require('./site'), localUtils);
-    },
-
-    get snippets() {
-        return shared.pipeline(require('./snippets'), localUtils);
     },
 
     get serializers() {

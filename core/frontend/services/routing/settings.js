@@ -1,11 +1,10 @@
-const Promise = require('bluebird');
 const moment = require('moment-timezone');
 const fs = require('fs-extra');
 const path = require('path');
 const urlService = require('../url');
 
-const errors = require('@tryghost/errors');
-const config = require('../../../shared/config');
+const common = require('../../../server/lib/common');
+const config = require('../../../server/config');
 
 /**
  * The `routes.yaml` file offers a way to configure your Ghost blog. It's currently a setting feature
@@ -57,7 +56,7 @@ const setFromFilePath = (filePath) => {
                     .then(() => {
                         if (!urlService.hasFinished()) {
                             if (tries > 5) {
-                                throw new errors.InternalServerError({
+                                throw new common.errors.InternalServerError({
                                     message: 'Could not load routes.yaml file.'
                                 });
                             }
@@ -87,11 +86,11 @@ const get = () => {
                 return Promise.resolve([]);
             }
 
-            if (errors.utils.isIgnitionError(err)) {
+            if (common.errors.utils.isIgnitionError(err)) {
                 throw err;
             }
 
-            throw new errors.NotFoundError({
+            throw new common.errors.NotFoundError({
                 err: err
             });
         });

@@ -1,4 +1,4 @@
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 const commands = require('../../../schema/commands');
 
 module.exports = {
@@ -11,13 +11,13 @@ module.exports = {
         const hasTable = await conn.schema.hasTable('members_stripe_customers');
 
         if (hasTable) {
-            logging.info('Dropping table: members_stripe_customers');
+            common.logging.info('Dropping table: members_stripe_customers');
             await commands.deleteTable('members_stripe_customers', conn);
         } else {
-            logging.warn('Dropping table: members_stripe_customers');
+            common.logging.warn('Dropping table: members_stripe_customers');
         }
 
-        logging.info('Adding table: members_stripe_customers');
+        common.logging.info('Adding table: members_stripe_customers');
         return commands.createTable('members_stripe_customers', conn);
     },
 
@@ -26,11 +26,11 @@ module.exports = {
         const hasTable = await conn.schema.hasTable('members_stripe_customers');
 
         if (!hasTable) {
-            logging.warn('Dropping table: members_stripe_customers');
+            common.logging.warn('Dropping table: members_stripe_customers');
             return;
         }
 
-        logging.info('Dropping table: members_stripe_customers');
+        common.logging.info('Dropping table: members_stripe_customers');
         return commands.deleteTable('members_stripe_customers', conn);
     }
 };

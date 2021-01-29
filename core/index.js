@@ -1,7 +1,7 @@
 // ## Server Loader
 // Passes options through the boot process to get a server instance back
 const server = require('./server');
-const errors = require('@tryghost/errors');
+const common = require('./server/lib/common');
 const GhostServer = require('./server/ghost-server');
 
 // Set the default environment to be `development`
@@ -12,11 +12,11 @@ function makeGhost(options) {
 
     return server(options)
         .catch((err) => {
-            if (!errors.utils.isIgnitionError(err)) {
-                err = new errors.GhostError({message: err.message, err: err});
+            if (!common.errors.utils.isIgnitionError(err)) {
+                err = new common.errors.GhostError({message: err.message, err: err});
             }
 
-            return GhostServer.announceServerReadiness(err)
+            return GhostServer.announceServerStopped(err)
                 .finally(() => {
                     throw err;
                 });

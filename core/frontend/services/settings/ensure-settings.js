@@ -1,10 +1,9 @@
-const fs = require('fs-extra');
-const Promise = require('bluebird');
-const path = require('path');
-const debug = require('ghost-ignition').debug('frontend:services:settings:ensure-settings');
-const {i18n} = require('../proxy');
-const errors = require('@tryghost/errors');
-const config = require('../../../shared/config');
+const fs = require('fs-extra'),
+    Promise = require('bluebird'),
+    path = require('path'),
+    debug = require('ghost-ignition').debug('services:settings:ensure-settings'),
+    common = require('../../../server/lib/common'),
+    config = require('../../../server/config');
 
 /**
  * Makes sure that all supported settings files are in the
@@ -17,28 +16,27 @@ const config = require('../../../shared/config');
  * copy the default yaml file over.
  */
 module.exports = function ensureSettingsFiles(knownSettings) {
-    const contentPath = config.getContentPath('settings');
-    const defaultSettingsPath = config.get('paths').defaultSettings;
+    const contentPath = config.getContentPath('settings'),
+        defaultSettingsPath = config.get('paths').defaultSettings;
 
     return Promise.each(knownSettings, function (setting) {
-        const fileName = `${setting}.yaml`;
-        const defaultFileName = `default-${fileName}`;
-        const filePath = path.join(contentPath, fileName);
+        const fileName = `${setting}.yaml`,
+            defaultFileName = `default-${fileName}`,
+            filePath = path.join(contentPath, fileName);
 
-        return Promise.resolve(fs.readFile(filePath, 'utf8'))
+        return fs.readFile(filePath, 'utf8')
             .catch({code: 'ENOENT'}, () => {
-                const defaultFilePath = path.join(defaultSettingsPath, defaultFileName);
                 // CASE: file doesn't exist, copy it from our defaults
                 return fs.copy(
-                    defaultFilePath,
-                    filePath
+                    path.join(defaultSettingsPath, defaultFileName),
+                    path.join(contentPath, fileName)
                 ).then(() => {
                     debug(`'${defaultFileName}' copied to ${contentPath}.`);
                 });
             }).catch((error) => {
                 // CASE: we might have a permission error, as we can't access the directory
-                throw new errors.GhostError({
-                    message: i18n.t('errors.services.settings.ensureSettings', {path: contentPath}),
+                throw new common.errors.GhostError({
+                    message: common.i18n.t('errors.services.settings.ensureSettings', {path: contentPath}),
                     err: error,
                     context: error.path
                 });

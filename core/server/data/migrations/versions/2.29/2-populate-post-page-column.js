@@ -1,5 +1,5 @@
 const toPairs = require('lodash/toPairs');
-const logging = require('../../../../../shared/logging');
+const common = require('../../../../lib/common');
 
 /*
  * @param from: object with a SINGLE entry { 'fromColumn': 'fromValue' }
@@ -9,7 +9,7 @@ const createColumnToColumnMap = ({from, to, tableName}) => (connection) => {
     return connection.schema.hasTable(tableName)
         .then((tableExists) => {
             if (!tableExists) {
-                logging.warn(
+                common.logging.warn(
                     `Table ${tableName} does not exist`
                 );
                 return;
@@ -23,12 +23,12 @@ const createColumnToColumnMap = ({from, to, tableName}) => (connection) => {
                 connection.schema.hasColumn(tableName, toColumn)
             ]).then(([fromColumnExists, toColumnExists]) => {
                 if (!fromColumnExists) {
-                    logging.warn(
+                    common.logging.warn(
                         `Table '${tableName}' does not have column '${fromColumn}'`
                     );
                 }
                 if (!toColumnExists) {
-                    logging.warn(
+                    common.logging.warn(
                         `Table '${tableName}' does not have column '${toColumn}'`
                     );
                 }
@@ -36,7 +36,7 @@ const createColumnToColumnMap = ({from, to, tableName}) => (connection) => {
                     return;
                 }
 
-                logging.info(
+                common.logging.info(
                     `Updating ${tableName}, setting "${toColumn}" column to "${toValue}" where "${fromColumn}" column is "${fromValue}"`
                 );
 

@@ -1,21 +1,20 @@
 const Promise = require('bluebird');
 const _ = require('lodash');
-const {i18n} = require('../lib/common');
-const errors = require('@tryghost/errors');
-const constants = require('@tryghost/constants');
-const security = require('@tryghost/security');
+const common = require('../lib/common');
+const constants = require('../lib/constants');
+const security = require('../lib/security');
 const settingsCache = require('../services/settings/cache');
 const ghostBookshelf = require('./base');
 
-let Invite;
-let Invites;
+let Invite,
+    Invites;
 
 Invite = ghostBookshelf.Model.extend({
     tableName: 'invites',
 
     toJSON: function (unfilteredOptions) {
-        const options = Invite.filterOptions(unfilteredOptions, 'toJSON');
-        const attrs = ghostBookshelf.Model.prototype.toJSON.call(this, options);
+        var options = Invite.filterOptions(unfilteredOptions, 'toJSON'),
+            attrs = ghostBookshelf.Model.prototype.toJSON.call(this, options);
 
         delete attrs.token;
         return attrs;
@@ -43,16 +42,16 @@ Invite = ghostBookshelf.Model.extend({
         return ghostBookshelf.Model.add.call(this, data, options);
     },
 
-    permissible(inviteModel, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasApiKeyPermission) {
+    permissible(inviteModel, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasAppPermission, hasApiKeyPermission) {
         const isAdd = (action === 'add');
 
         if (!isAdd) {
-            if (hasUserPermission && hasApiKeyPermission) {
+            if (hasUserPermission && hasAppPermission && hasApiKeyPermission) {
                 return Promise.resolve();
             }
 
-            return Promise.reject(new errors.NoPermissionError({
-                message: i18n.t('errors.models.invite.notEnoughPermission')
+            return Promise.reject(new common.errors.NoPermissionError({
+                message: common.i18n.t('errors.models.invite.notEnoughPermission')
             }));
         }
 
@@ -61,14 +60,14 @@ Invite = ghostBookshelf.Model.extend({
             .findOne({id: unsafeAttrs.role_id})
             .then((roleToInvite) => {
                 if (!roleToInvite) {
-                    return Promise.reject(new errors.NotFoundError({
-                        message: i18n.t('errors.api.invites.roleNotFound')
+                    return Promise.reject(new common.errors.NotFoundError({
+                        message: common.i18n.t('errors.api.invites.roleNotFound')
                     }));
                 }
 
                 if (roleToInvite.get('name') === 'Owner') {
-                    return Promise.reject(new errors.NoPermissionError({
-                        message: i18n.t('errors.api.invites.notAllowedToInviteOwner')
+                    return Promise.reject(new common.errors.NoPermissionError({
+                        message: common.i18n.t('errors.api.invites.notAllowedToInviteOwner')
                     }));
                 }
 
@@ -82,17 +81,17 @@ Invite = ghostBookshelf.Model.extend({
                 }
 
                 if (allowed.indexOf(roleToInvite.get('name')) === -1) {
-                    throw new errors.NoPermissionError({
-                        message: i18n.t('errors.api.invites.notAllowedToInvite')
+                    throw new common.errors.NoPermissionError({
+                        message: common.i18n.t('errors.api.invites.notAllowedToInvite')
                     });
                 }
 
-                if (hasUserPermission && hasApiKeyPermission) {
+                if (hasUserPermission && hasAppPermission && hasApiKeyPermission) {
                     return Promise.resolve();
                 }
 
-                return Promise.reject(new errors.NoPermissionError({
-                    message: i18n.t('errors.models.invite.notEnoughPermission')
+                return Promise.reject(new common.errors.NoPermissionError({
+                    message: common.i18n.t('errors.models.invite.notEnoughPermission')
                 }));
             });
     }

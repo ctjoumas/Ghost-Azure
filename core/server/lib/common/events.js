@@ -1,7 +1,7 @@
-const events = require('events');
-const util = require('util');
-let EventRegistry;
-let EventRegistryInstance;
+const events = require('events'),
+    util = require('util');
+let EventRegistry,
+    EventRegistryInstance;
 
 EventRegistry = function () {
     events.EventEmitter.call(this);

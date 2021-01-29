@@ -3,56 +3,37 @@ const localUtils = require('../../../index');
 
 const tag = (attrs, frame) => {
     if (localUtils.isContentAPI(frame)) {
-        const contentAttrs = _.pick(attrs, [
-            'description',
-            'feature_image',
-            'id',
-            'meta_description',
-            'meta_title',
-            'name',
-            'slug',
-            'url',
-            'visibility',
-            'count'
-        ]);
+        delete attrs.created_at;
+        delete attrs.updated_at;
 
         // We are standardising on returning null from the Content API for any empty values
-        if (contentAttrs.meta_title === '') {
-            contentAttrs.meta_title = null;
+        if (attrs.meta_title === '') {
+            attrs.meta_title = null;
         }
-        if (contentAttrs.meta_description === '') {
-            contentAttrs.meta_description = null;
+        if (attrs.meta_description === '') {
+            attrs.meta_description = null;
         }
-        if (contentAttrs.description === '') {
-            contentAttrs.description = null;
+        if (attrs.description === '') {
+            attrs.description = null;
         }
-
-        return contentAttrs;
     }
 
-    return _.pick(attrs, [
-        'created_at',
-        'description',
-        'feature_image',
-        'id',
-        'meta_description',
-        'meta_title',
-        'name',
-        'slug',
-        'updated_at',
-        'url',
-        'visibility',
-        'count'
-    ]);
+    // Already deleted in model.toJSON, but leaving here so that we can clean that up when we deprecate v0.1
+    delete attrs.parent_id;
+
+    // @NOTE: unused fields
+    delete attrs.parent;
+
+    return attrs;
 };
 
 const author = (attrs, frame) => {
     if (localUtils.isContentAPI(frame)) {
+        // Already deleted in model.toJSON, but leaving here so that we can clean that up when we deprecate v0.1
         delete attrs.created_at;
         delete attrs.updated_at;
         delete attrs.last_seen;
         delete attrs.status;
-        delete attrs.email;
 
         // @NOTE: used for night shift
         delete attrs.accessibility;
@@ -87,6 +68,7 @@ const author = (attrs, frame) => {
     // @NOTE: unused fields
     delete attrs.visibility;
     delete attrs.locale;
+    delete attrs.ghost_auth_id;
 
     return attrs;
 };
@@ -132,7 +114,6 @@ const post = (attrs, frame) => {
 
     delete attrs.locale;
     delete attrs.author;
-    delete attrs.type;
 
     return attrs;
 };

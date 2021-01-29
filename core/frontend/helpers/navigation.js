@@ -2,26 +2,24 @@
 // `{{navigation}}`
 // Outputs navigation menu of static urls
 
-const {SafeString, i18n, errors, templates, hbs} = require('../services/proxy');
-const {slugify} = require('@tryghost/string');
-const _ = require('lodash');
-const createFrame = hbs.handlebars.createFrame;
+var proxy = require('./proxy'),
+    string = require('../../server/lib/security/string'),
+    _ = require('lodash'),
+    SafeString = proxy.SafeString,
+    createFrame = proxy.hbs.handlebars.createFrame,
+    i18n = proxy.i18n,
+    errors = proxy.errors,
+    templates = proxy.templates;
 
 module.exports = function navigation(options) {
     options = options || {};
     options.hash = options.hash || {};
     options.data = options.data || {};
 
-    const key = options.hash.type && options.hash.type === 'secondary' ? 'secondary_navigation' : 'navigation';
-    // Set isSecondary so we can compare in the template
-    options.hash.isSecondary = !!(options.hash.type && options.hash.type === 'secondary');
-    // Remove type, so it's not accessible
-    delete options.hash.type;
-
-    const navigationData = options.data.site[key];
-    const currentUrl = options.data.root.relativeUrl;
-    const self = this;
-    let output;
+    var navigationData = options.data.blog.navigation,
+        currentUrl = options.data.root.relativeUrl,
+        self = this,
+        output;
 
     if (!_.isObject(navigationData) || _.isFunction(navigationData)) {
         throw new errors.IncorrectUsageError({
@@ -47,14 +45,18 @@ module.exports = function navigation(options) {
         });
     }
 
+    function _slugify(label) {
+        return string.safe(label);
+    }
+
     // strips trailing slashes and compares urls
-    function _isCurrentUrl(href, url) {
-        if (!url) {
+    function _isCurrentUrl(href, currentUrl) {
+        if (!currentUrl) {
             return false;
         }
 
-        const strippedHref = href.replace(/\/+$/, '');
-        const strippedCurrentUrl = url.replace(/\/+$/, '');
+        var strippedHref = href.replace(/\/+$/, ''),
+            strippedCurrentUrl = currentUrl.replace(/\/+$/, '');
         return strippedHref === strippedCurrentUrl;
     }
 
@@ -64,10 +66,10 @@ module.exports = function navigation(options) {
     }
 
     output = navigationData.map(function (e) {
-        const out = {};
+        var out = {};
         out.current = _isCurrentUrl(e.url, currentUrl);
         out.label = e.label;
-        out.slug = slugify(e.label);
+        out.slug = _slugify(e.label);
         out.url = e.url;
         out.secure = self.secure;
         return out;

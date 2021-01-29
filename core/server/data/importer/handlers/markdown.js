@@ -1,19 +1,21 @@
-const _ = require('lodash');
-const Promise = require('bluebird');
-const fs = require('fs-extra');
-const moment = require('moment');
-const featuredImageRegex = /^(!\[]\(([^)]*?)\)\s+)(?=#)/;
-const titleRegex = /^#\s?([\w\W]*?)(?=\n)/;
-const statusRegex = /(published||draft)-/;
-const dateRegex = /(\d{4}-\d{2}-\d{2})-/;
-let processDateTime;
-let processFileName;
-let processMarkdownFile;
-let MarkdownHandler;
+var _ = require('lodash'),
+    Promise = require('bluebird'),
+    fs = require('fs-extra'),
+    moment = require('moment'),
+
+    featuredImageRegex = /^(!\[]\(([^)]*?)\)\s+)(?=#)/,
+    titleRegex = /^#\s?([\w\W]*?)(?=\n)/,
+    statusRegex = /(published||draft)-/,
+    dateRegex = /(\d{4}-\d{2}-\d{2})-/,
+
+    processDateTime,
+    processFileName,
+    processMarkdownFile,
+    MarkdownHandler;
 
 // Takes a date from the filename in y-m-d-h-m form, and converts it into a Date ready to import
 processDateTime = function (post, datetime) {
-    const format = 'YYYY-MM-DD-HH-mm';
+    var format = 'YYYY-MM-DD-HH-mm';
     datetime = moment.utc(datetime, format).valueOf();
 
     if (post.status && post.status === 'published') {
@@ -26,9 +28,9 @@ processDateTime = function (post, datetime) {
 };
 
 processFileName = function (filename) {
-    let post = {};
-    let name = filename.split('.')[0];
-    let match;
+    var post = {},
+        name = filename.split('.')[0],
+        match;
 
     // Parse out the status
     match = name.match(statusRegex);
@@ -52,8 +54,8 @@ processFileName = function (filename) {
 };
 
 processMarkdownFile = function (filename, content) {
-    const post = processFileName(filename);
-    let match;
+    var post = processFileName(filename),
+        match;
 
     content = content.replace(/\r\n/gm, '\n');
 
@@ -85,9 +87,9 @@ MarkdownHandler = {
     directories: [],
 
     loadFile: function (files, startDir) {
-        const startDirRegex = startDir ? new RegExp('^' + startDir + '/') : new RegExp('');
-        const posts = [];
-        const ops = [];
+        var startDirRegex = startDir ? new RegExp('^' + startDir + '/') : new RegExp(''),
+            posts = [],
+            ops = [];
 
         _.each(files, function (file) {
             ops.push(fs.readFile(file.path).then(function (content) {

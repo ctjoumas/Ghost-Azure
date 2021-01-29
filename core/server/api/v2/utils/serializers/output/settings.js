@@ -2,7 +2,7 @@ const _ = require('lodash');
 const utils = require('../../index');
 const mapper = require('./utils/mapper');
 const _private = {};
-const deprecatedSettings = ['secondary_nav'];
+const deprecatedSettings = ['force_i18n', 'permalinks'];
 
 /**
  * ### Settings Filter
@@ -13,10 +13,10 @@ const deprecatedSettings = ['secondary_nav'];
  * @returns {*}
  */
 _private.settingsFilter = (settings, filter) => {
-    let filteredGroups = filter ? filter.split(',') : false;
+    let filteredTypes = filter ? filter.split(',') : false;
     return _.filter(settings, (setting) => {
-        if (filteredGroups) {
-            return _.includes(filteredGroups, setting.group) && !_.includes(deprecatedSettings, setting.key);
+        if (filteredTypes) {
+            return _.includes(filteredTypes, setting.type) && !_.includes(deprecatedSettings, setting.key);
         }
 
         return !_.includes(deprecatedSettings, setting.key);

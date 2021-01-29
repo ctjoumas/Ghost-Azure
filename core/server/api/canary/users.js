@@ -1,37 +1,9 @@
 const Promise = require('bluebird');
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
+const common = require('../../lib/common');
 const models = require('../../models');
 const permissionsService = require('../../services/permissions');
-const dbBackup = require('../../data/db/backup');
-const UsersService = require('../../services/users');
-const userService = new UsersService({dbBackup, models});
 const ALLOWED_INCLUDES = ['count.posts', 'permissions', 'roles', 'roles.permissions'];
 const UNSAFE_ATTRS = ['status', 'roles'];
-
-function permissionOnlySelf(frame) {
-    const targetId = getTargetId(frame);
-    const userId = frame.user.id;
-    if (targetId !== userId) {
-        return Promise.reject(new errors.NoPermissionError({message: i18n.t('errors.permissions.noPermissionToAction')}));
-    }
-    return Promise.resolve();
-}
-
-function getTargetId(frame) {
-    return frame.options.id === 'me' ? frame.user.id : frame.options.id;
-}
-
-async function fetchOrCreatePersonalToken(userId) {
-    const token = await models.ApiKey.findOne({user_id: userId}, {});
-
-    if (!token) {
-        const newToken = await models.ApiKey.add({user_id: userId, type: 'admin'});
-        return newToken;
-    }
-
-    return token;
-}
 
 module.exports = {
     docName: 'users',
@@ -84,8 +56,8 @@ module.exports = {
             return models.User.findOne(frame.data, frame.options)
                 .then((model) => {
                     if (!model) {
-                        return Promise.reject(new errors.NotFoundError({
-                            message: i18n.t('errors.api.users.userNotFound')
+                        return Promise.reject(new common.errors.NotFoundError({
+                            message: common.i18n.t('errors.api.users.userNotFound')
                         }));
                     }
 
@@ -117,8 +89,8 @@ module.exports = {
             return models.User.edit(frame.data.users[0], frame.options)
                 .then((model) => {
                     if (!model) {
-                        return Promise.reject(new errors.NotFoundError({
-                            message: i18n.t('errors.api.users.userNotFound')
+                        return Promise.reject(new common.errors.NotFoundError({
+                            message: common.i18n.t('errors.api.users.userNotFound')
                         }));
                     }
 
@@ -134,6 +106,7 @@ module.exports = {
     },
 
     destroy: {
+        statusCode: 204,
         headers: {
             cacheInvalidate: true
         },
@@ -148,9 +121,19 @@ module.exports = {
             }
         },
         permissions: true,
-        async query(frame) {
-            return userService.destroyUser(frame.options).catch((err) => {
-                return Promise.reject(new errors.NoPermissionError({
+        query(frame) {
+            return models.Base.transaction((t) => {
+                frame.options.transacting = t;
+
+                return Promise.all([
+                    models.Accesstoken.destroyByUser(frame.options),
+                    models.Refreshtoken.destroyByUser(frame.options),
+                    models.Post.destroyByAuthor(frame.options)
+                ]).then(() => {
+                    return models.User.destroy(Object.assign({status: 'all'}, frame.options));
+                }).return(null);
+            }).catch((err) => {
+                return Promise.reject(new common.errors.NoPermissionError({
                     err: err
                 }));
             });
@@ -174,7 +157,6 @@ module.exports = {
             }
         },
         query(frame) {
-            frame.options.skipSessionID = frame.original.session.id;
             return models.User.changePassword(frame.data.password[0], frame.options);
         }
     },
@@ -188,47 +170,6 @@ module.exports = {
         },
         query(frame) {
             return models.User.transferOwnership(frame.data.owner[0], frame.options);
-        }
-    },
-
-    readToken: {
-        options: [
-            'id'
-        ],
-        validation: {
-            options: {
-                id: {
-                    required: true
-                }
-            }
-        },
-        permissions: permissionOnlySelf,
-        query(frame) {
-            const targetId = getTargetId(frame);
-            return fetchOrCreatePersonalToken(targetId);
-        }
-    },
-
-    regenerateToken: {
-        headers: {
-            cacheInvalidate: true
-        },
-        options: [
-            'id'
-        ],
-        validation: {
-            options: {
-                id: {
-                    required: true
-                }
-            }
-        },
-        permissions: permissionOnlySelf,
-        query(frame) {
-            const targetId = getTargetId(frame);
-            return fetchOrCreatePersonalToken(targetId).then((model) => {
-                return models.ApiKey.refreshSecret(model.toJSON(), Object.assign({}, {id: model.id}));
-            });
         }
     }
 };

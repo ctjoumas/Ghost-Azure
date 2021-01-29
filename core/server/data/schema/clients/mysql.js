@@ -1,13 +1,22 @@
-const _ = require('lodash');
-const db = require('../../../data/db');
+var _ = require('lodash'),
+    db = require('../../../data/db'),
 
-const doRawAndFlatten = function doRaw(query, transaction, flattenFn) {
+    // private
+    doRawAndFlatten,
+
+    // public
+    getTables,
+    getIndexes,
+    getColumns,
+    checkPostTable;
+
+doRawAndFlatten = function doRaw(query, transaction, flattenFn) {
     return (transaction || db.knex).raw(query).then(function (response) {
         return _.flatten(flattenFn(response));
     });
 };
 
-const getTables = function getTables(transaction) {
+getTables = function getTables(transaction) {
     return doRawAndFlatten('show tables', transaction, function (response) {
         return _.map(response[0], function (entry) {
             return _.values(entry);
@@ -15,13 +24,13 @@ const getTables = function getTables(transaction) {
     });
 };
 
-const getIndexes = function getIndexes(table, transaction) {
+getIndexes = function getIndexes(table, transaction) {
     return doRawAndFlatten('SHOW INDEXES from ' + table, transaction, function (response) {
         return _.map(response[0], 'Key_name');
     });
 };
 
-const getColumns = function getColumns(table, transaction) {
+getColumns = function getColumns(table, transaction) {
     return doRawAndFlatten('SHOW COLUMNS FROM ' + table, transaction, function (response) {
         return _.map(response[0], 'Field');
     });
@@ -31,7 +40,7 @@ const getColumns = function getColumns(table, transaction) {
 // a wrong datatype in schema.js some installations using mysql could have been created using the
 // data type text instead of mediumtext.
 // For details see: https://github.com/TryGhost/Ghost/issues/1947
-const checkPostTable = function checkPostTable(transaction) {
+checkPostTable = function checkPostTable(transaction) {
     return (transaction || db.knex).raw('SHOW FIELDS FROM posts where Field ="html" OR Field = "markdown"').then(function (response) {
         return _.flatten(_.map(response[0], function (entry) {
             if (entry.Type.toLowerCase() !== 'mediumtext') {

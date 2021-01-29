@@ -1,5 +1,5 @@
-const sqlite3 = require('./sqlite3');
-const mysql = require('./mysql');
+var sqlite3 = require('./sqlite3'),
+    mysql = require('./mysql');
 
 module.exports = {
     sqlite3: sqlite3,

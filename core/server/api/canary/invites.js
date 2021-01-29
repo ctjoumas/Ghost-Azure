@@ -1,7 +1,9 @@
 const Promise = require('bluebird');
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
-const invites = require('../../services/invites');
+const common = require('../../lib/common');
+const security = require('../../lib/security');
+const mailService = require('../../services/mail');
+const urlUtils = require('../../lib/url-utils');
+const settingsCache = require('../../services/settings/cache');
 const models = require('../../models');
 const api = require('./index');
 const ALLOWED_INCLUDES = [];
@@ -49,8 +51,8 @@ module.exports = {
             return models.Invite.findOne(frame.data, frame.options)
                 .then((model) => {
                     if (!model) {
-                        return Promise.reject(new errors.NotFoundError({
-                            message: i18n.t('errors.api.invites.inviteNotFound')
+                        return Promise.reject(new common.errors.NotFoundError({
+                            message: common.i18n.t('errors.api.invites.inviteNotFound')
                         }));
                     }
 
@@ -75,12 +77,7 @@ module.exports = {
             frame.options.require = true;
 
             return models.Invite.destroy(frame.options)
-                .then(() => null)
-                .catch(models.Invite.NotFoundError, () => {
-                    return Promise.reject(new errors.NotFoundError({
-                        message: i18n.t('errors.api.invites.inviteNotFound')
-                    }));
-                });
+                .return(null);
         }
     },
 
@@ -107,16 +104,73 @@ module.exports = {
             unsafeAttrs: UNSAFE_ATTRS
         },
         query(frame) {
-            return invites.add({
-                api,
-                InviteModel: models.Invite,
-                invites: frame.data.invites,
-                options: frame.options,
-                user: {
-                    name: frame.user.get('name'),
-                    email: frame.user.get('email')
-                }
-            });
+            let invite;
+            let emailData;
+
+            // CASE: ensure we destroy the invite before
+            return models.Invite.findOne({email: frame.data.invites[0].email}, frame.options)
+                .then((invite) => {
+                    if (!invite) {
+                        return;
+                    }
+
+                    return invite.destroy(frame.options);
+                })
+                .then(() => {
+                    return models.Invite.add(frame.data.invites[0], frame.options);
+                })
+                .then((_invite) => {
+                    invite = _invite;
+
+                    const adminUrl = urlUtils.urlFor('admin', true);
+
+                    emailData = {
+                        blogName: settingsCache.get('title'),
+                        invitedByName: frame.user.get('name'),
+                        invitedByEmail: frame.user.get('email'),
+                        resetLink: urlUtils.urlJoin(adminUrl, 'signup', security.url.encodeBase64(invite.get('token')), '/')
+                    };
+
+                    return mailService.utils.generateContent({data: emailData, template: 'invite-user'});
+                })
+                .then((emailContent) => {
+                    const payload = {
+                        mail: [{
+                            message: {
+                                to: invite.get('email'),
+                                subject: common.i18n.t('common.api.users.mail.invitedByName', {
+                                    invitedByName: emailData.invitedByName,
+                                    blogName: emailData.blogName
+                                }),
+                                html: emailContent.html,
+                                text: emailContent.text
+                            },
+                            options: {}
+                        }]
+                    };
+
+                    return api.mail.send(payload, {context: {internal: true}});
+                })
+                .then(() => {
+                    return models.Invite.edit({
+                        status: 'sent'
+                    }, Object.assign({id: invite.id}, frame.options));
+                })
+                .then((invite) => {
+                    return invite;
+                })
+                .catch((err) => {
+                    if (err && err.errorType === 'EmailError') {
+                        const errorMessage = common.i18n.t('errors.api.invites.errorSendingEmail.error', {
+                            message: err.message
+                        });
+                        const helpText = common.i18n.t('errors.api.invites.errorSendingEmail.help');
+                        err.message = `${errorMessage} ${helpText}`;
+                        common.logging.warn(err.message);
+                    }
+
+                    return Promise.reject(err);
+                });
         }
     }
 };

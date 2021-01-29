@@ -1,8 +1,8 @@
 const Promise = require('bluebird');
-const dbBackup = require('../../data/db/backup');
+const backupDatabase = require('../../data/db/backup');
 const exporter = require('../../data/exporter');
 const importer = require('../../data/importer');
-const errors = require('@tryghost/errors');
+const common = require('../../lib/common');
 const models = require('../../models');
 
 module.exports = {
@@ -25,14 +25,13 @@ module.exports = {
             // NOTE: we need to have `include` property available as backupDatabase uses it internally
             Object.assign(frame.options, {include: frame.options.withRelated});
 
-            return dbBackup.backup(frame.options);
+            return backupDatabase(frame.options);
         }
     },
 
     exportContent: {
         options: [
-            'include',
-            'filename'
+            'include'
         ],
         validation: {
             options: {
@@ -48,21 +47,11 @@ module.exports = {
             }
         },
         permissions: true,
-        async query(frame) {
-            if (frame.options.filename) {
-                let backup = await dbBackup.readBackup(frame.options.filename);
-
-                if (!backup) {
-                    throw new errors.NotFoundError();
-                }
-
-                return backup;
-            }
-
+        query(frame) {
             return Promise.resolve()
                 .then(() => exporter.doExport({include: frame.options.withRelated}))
                 .catch((err) => {
-                    return Promise.reject(new errors.GhostError({err: err}));
+                    return Promise.reject(new common.errors.GhostError({err: err}));
                 });
         }
     },
@@ -118,14 +107,14 @@ module.exports = {
                             }, {concurrency: 100});
                         })
                         .catch((err) => {
-                            throw new errors.GhostError({
+                            throw new common.errors.GhostError({
                                 err: err
                             });
                         });
                 });
             }
 
-            return dbBackup.backup().then(deleteContent);
+            return backupDatabase().then(deleteContent);
         }
     }
 };

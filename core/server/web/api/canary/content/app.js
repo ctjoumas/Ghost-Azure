@@ -1,13 +1,13 @@
 const debug = require('ghost-ignition').debug('web:api:canary:content:app');
 const boolParser = require('express-query-boolean');
 const bodyParser = require('body-parser');
-const express = require('../../../../../shared/express');
+const express = require('express');
 const shared = require('../../../shared');
 const routes = require('./routes');
 
 module.exports = function setupApiApp() {
     debug('Content API canary setup start');
-    const apiApp = express('canary content');
+    const apiApp = express();
 
     // API middleware
 

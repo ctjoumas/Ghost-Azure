@@ -1,9 +1,9 @@
-const _ = require('lodash');
-const rssCache = require('./cache');
+var _ = require('lodash'),
+    rssCache = require('./cache');
 
 module.exports.render = function render(res, baseUrl, data) {
     // Format data - this is the same as what Express does
-    const rssData = _.merge({}, res.locals, data);
+    var rssData = _.merge({}, res.locals, data);
 
     // Fetch RSS from the cache
     return rssCache

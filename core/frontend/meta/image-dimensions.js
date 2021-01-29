@@ -1,20 +1,20 @@
-const Promise = require('bluebird');
-const _ = require('lodash');
-const imageSizeCache = require('../../server/lib/image').cachedImageSizeFromUrl;
+var Promise = require('bluebird'),
+    _ = require('lodash'),
+    imageLib = require('../../server/lib/image');
 
 /**
  * Get Image dimensions
  * @param {object} metaData
  * @returns {object} metaData
- * @description for image properties in meta data (coverImage, authorImage and site.logo), `getCachedImageSizeFromUrl` is
+ * @description for image properties in meta data (coverImage, authorImage and blog.logo), `getCachedImageSizeFromUrl` is
  * called to receive image width and height
  */
 function getImageDimensions(metaData) {
-    const fetch = {
-        coverImage: imageSizeCache.getCachedImageSizeFromUrl(metaData.coverImage.url),
-        authorImage: imageSizeCache.getCachedImageSizeFromUrl(metaData.authorImage.url),
-        ogImage: imageSizeCache.getCachedImageSizeFromUrl(metaData.ogImage.url),
-        logo: imageSizeCache.getCachedImageSizeFromUrl(metaData.site.logo.url)
+    var fetch = {
+        coverImage: imageLib.imageSizeCache(metaData.coverImage.url),
+        authorImage: imageLib.imageSizeCache(metaData.authorImage.url),
+        ogImage: imageLib.imageSizeCache(metaData.ogImage.url),
+        logo: imageLib.imageSizeCache(metaData.blog.logo.url)
     };
 
     return Promise
@@ -28,7 +28,7 @@ function getImageDimensions(metaData) {
                     // we will fake it in some cases or not produce an imageObject at all.
                     if (value === 'logo') {
                         if (key.height <= 60 && key.width <= 600) {
-                            _.assign(metaData.site[value], {
+                            _.assign(metaData.blog[value], {
                                 dimensions: {
                                     width: key.width,
                                     height: key.height
@@ -36,7 +36,7 @@ function getImageDimensions(metaData) {
                             });
                         } else if (key.width === key.height) {
                             // CASE: the logo is too large, but it is a square. We fake it...
-                            _.assign(metaData.site[value], {
+                            _.assign(metaData.blog[value], {
                                 dimensions: {
                                     width: 60,
                                     height: 60

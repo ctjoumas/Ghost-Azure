@@ -1,11 +1,11 @@
-const {events} = require('../../lib/common');
+const common = require('../../lib/common');
 
 module.exports = {
     docName: 'slack',
     sendTest: {
         permissions: false,
         query() {
-            events.emit('slack.test');
+            common.events.emit('slack.test');
         }
     }
 };

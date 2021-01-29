@@ -1,7 +1,9 @@
 const got = require('got');
-const dnsPromises = require('dns').promises;
-const errors = require('@tryghost/errors');
-const config = require('../../shared/config');
+const {URL} = require('url');
+const dns = require('dns');
+const common = require('./common');
+const ghostVersion = require('./ghost-version');
+const config = require('../config');
 const validator = require('../data/validation').validator;
 
 function isPrivateIp(addr) {
@@ -16,7 +18,7 @@ function isPrivateIp(addr) {
       /^::$/.test(addr);
 }
 
-async function errorIfHostnameResolvesToPrivateIp(options) {
+function errorIfHostnameResolvesToPrivateIp(options) {
     // allow requests through to local Ghost instance
     const siteUrl = new URL(config.get('url'));
     const requestUrl = new URL(options.href);
@@ -24,27 +26,33 @@ async function errorIfHostnameResolvesToPrivateIp(options) {
         return Promise.resolve();
     }
 
-    const result = await dnsPromises.lookup(options.hostname);
+    dns.lookup(options.hostname, {}, (err, address) => {
+        if (err) {
+            throw err;
+        }
 
-    if (isPrivateIp(result.address)) {
-        return Promise.reject(new errors.InternalServerError({
-            message: 'URL resolves to a non-permitted private IP block',
-            code: 'URL_PRIVATE_INVALID',
-            context: options.href
-        }));
-    }
+        if (isPrivateIp(address)) {
+            throw new common.errors.InternalServerError({
+                message: 'URL resolves to a non-permitted private IP block',
+                code: 'URL_PRIVATE_INVALID',
+                context: options.href
+            });
+        }
+
+        return Promise.resolve();
+    });
 }
 
 // same as our normal request lib but if any request in a redirect chain resolves
 // to a private IP address it will be blocked before the request is made.
 const externalRequest = got.extend({
     headers: {
-        'user-agent': 'Ghost(https://github.com/TryGhost/Ghost)'
+        'user-agent': 'Ghost/' + ghostVersion.original + ' (https://github.com/TryGhost/Ghost)'
     },
     hooks: {
         init: [(options) => {
             if (!options.hostname || !validator.isURL(options.hostname)) {
-                throw new errors.InternalServerError({
+                throw new common.errors.InternalServerError({
                     message: 'URL empty or invalid.',
                     code: 'URL_MISSING_INVALID',
                     context: options.href

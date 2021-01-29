@@ -2,8 +2,8 @@ const debug = require('ghost-ignition').debug('api:shared:pipeline');
 const Promise = require('bluebird');
 const _ = require('lodash');
 const shared = require('../shared');
-const errors = require('@tryghost/errors');
-const {sequence} = require('@tryghost/promise');
+const common = require('../../lib/common');
+const sequence = require('../../lib/promise/sequence');
 
 const STAGES = {
     validation: {
@@ -106,7 +106,7 @@ const STAGES = {
 
         // CASE: it's required to put the permission key to avoid security holes
         if (!Object.prototype.hasOwnProperty.call(apiImpl, 'permissions')) {
-            return Promise.reject(new errors.IncorrectUsageError());
+            return Promise.reject(new common.errors.IncorrectUsageError());
         }
 
         // CASE: handle permissions completely yourself
@@ -150,7 +150,7 @@ const STAGES = {
         debug('stages: query');
 
         if (!apiImpl.query) {
-            return Promise.reject(new errors.IncorrectUsageError());
+            return Promise.reject(new common.errors.IncorrectUsageError());
         }
 
         return apiImpl.query(frame);
@@ -189,9 +189,7 @@ const pipeline = (apiController, apiUtils, apiType) => {
 
         obj[key] = function wrapper() {
             const apiConfig = {docName, method};
-            let options;
-            let data;
-            let frame;
+            let options, data, frame;
 
             if (arguments.length === 2) {
                 data = arguments[0];
@@ -204,7 +202,6 @@ const pipeline = (apiController, apiUtils, apiType) => {
 
             // CASE: http helper already creates it's own frame.
             if (!(options instanceof shared.Frame)) {
-                debug(`Internal API request for ${docName}.${method}`);
                 frame = new shared.Frame({
                     body: data,
                     options: _.omit(options, 'context'),

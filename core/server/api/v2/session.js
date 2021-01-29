@@ -1,26 +1,22 @@
 const Promise = require('bluebird');
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
+const common = require('../../lib/common');
 const models = require('../../models');
 const auth = require('../../services/auth');
-const api = require('./index');
 
 const session = {
-    read(frame) {
+    read(options) {
         /*
          * TODO
          * Don't query db for user, when new api http wrapper is in we can
          * have direct access to req.user, we can also get access to some session
          * inofrmation too and send it back
          */
-        return models.User.findOne({id: frame.options.context.user});
+        return models.User.findOne({id: options.context.user});
     },
-    add(frame) {
-        const object = frame.data;
-
+    add(object) {
         if (!object || !object.username || !object.password) {
-            return Promise.reject(new errors.UnauthorizedError({
-                message: i18n.t('errors.middleware.auth.accessDenied')
+            return Promise.reject(new common.errors.UnauthorizedError({
+                message: common.i18n.t('errors.middleware.auth.accessDenied')
             }));
         }
 
@@ -37,23 +33,11 @@ const session = {
                     auth.session.createSession(req, res, next);
                 });
             });
-        }).catch(async (err) => {
-            if (!errors.utils.isIgnitionError(err)) {
-                throw new errors.UnauthorizedError({
-                    message: i18n.t('errors.middleware.auth.accessDenied'),
-                    err
-                });
-            }
-
-            if (err.errorType === 'PasswordResetRequiredError') {
-                await api.authentication.generateResetToken({
-                    passwordreset: [{
-                        email: object.username
-                    }]
-                }, frame.options.context);
-            }
-
-            throw err;
+        }).catch((err) => {
+            throw new common.errors.UnauthorizedError({
+                message: common.i18n.t('errors.middleware.auth.accessDenied'),
+                err
+            });
         });
     },
     delete() {

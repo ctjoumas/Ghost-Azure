@@ -1,5 +1,3 @@
-const path = require('path');
-
 const web = require('../../web');
 const redirects = require('../../../frontend/services/redirects');
 
@@ -10,27 +8,10 @@ module.exports = {
         headers: {
             disposition: {
                 type: 'file',
-                value() {
-                    return redirects.settings.getRedirectsFilePath()
-                        .then((filePath) => {
-                            // TODO: Default file type is .json for backward compatibility.
-                            // When .yaml becomes default or .json is removed at v4,
-                            // This part should be changed.
-                            return filePath === null || path.extname(filePath) === '.json'
-                                ? 'redirects.json'
-                                : 'redirects.yaml';
-                        });
-                }
+                value: 'redirects.json'
             }
         },
         permissions: true,
-        response: {
-            async format() {
-                const filePath = await redirects.settings.getRedirectsFilePath();
-
-                return filePath === null || path.extname(filePath) === '.json' ? 'json' : 'plain';
-            }
-        },
         query() {
             return redirects.settings.get();
         }
@@ -42,7 +23,7 @@ module.exports = {
             cacheInvalidate: true
         },
         query(frame) {
-            return redirects.settings.setFromFilePath(frame.file.path, frame.file.ext)
+            return redirects.settings.setFromFilePath(frame.file.path)
                 .then(() => {
                     // CASE: trigger that redirects are getting re-registered
                     web.shared.middlewares.customRedirects.reload();

@@ -8,9 +8,10 @@
 
 require('./core/server/overrides');
 
-const config = require('./core/shared/config');
+const config = require('./core/server/config');
 const urlService = require('./core/frontend/services/url');
 const _ = require('lodash');
+const chalk = require('chalk');
 const fs = require('fs-extra');
 const KnexMigrator = require('knex-migrator');
 const knexMigrator = new KnexMigrator({
@@ -34,30 +35,11 @@ const logBuildingClient = function (grunt) {
 // ## Grunt configuration
 const configureGrunt = function (grunt) {
     // #### Load all grunt tasks
-    grunt.loadNpmTasks('@lodder/grunt-postcss');
-    grunt.loadNpmTasks('grunt-bg-shell');
-    grunt.loadNpmTasks('grunt-contrib-clean');
-    grunt.loadNpmTasks('grunt-contrib-compress');
-    grunt.loadNpmTasks('grunt-contrib-copy');
-    grunt.loadNpmTasks('grunt-contrib-symlink');
-    grunt.loadNpmTasks('grunt-contrib-watch');
-    grunt.loadNpmTasks('grunt-express-server');
-    grunt.loadNpmTasks('grunt-mocha-cli');
-    grunt.loadNpmTasks('grunt-shell');
-    grunt.loadNpmTasks('grunt-subgrunt');
-    grunt.loadNpmTasks('grunt-update-submodules');
+    //
+    // Find all of the task which start with `grunt-` and load them, rather than explicitly declaring them all
+    require('matchdep').filterDev(['grunt-*', '!grunt-cli']).forEach(grunt.loadNpmTasks);
 
-    /** This little bit of weirdness gives the express server chance to shutdown properly */
-    const waitBeforeExit = () => {
-        setTimeout(() => {
-            process.exit(0);
-        }, 1000);
-    };
-
-    process.on('SIGINT', waitBeforeExit);
-    process.on('SIGTERM', waitBeforeExit);
-
-    const cfg = {
+    var cfg = {
         // #### Common paths used by tasks
         paths: {
             build: buildDirectory,
@@ -94,11 +76,9 @@ const configureGrunt = function (grunt) {
             },
             express: {
                 files: [
+                    'core/ghost-server.js',
                     'core/server/**/*.js',
-                    'core/shared/**/*.js',
                     'core/frontend/**/*.js',
-                    'core/index.js',
-                    'index.js',
                     'config.*.json',
                     '!config.testing.json'
                 ],
@@ -134,27 +114,27 @@ const configureGrunt = function (grunt) {
             options: {
                 ui: 'bdd',
                 reporter: grunt.option('reporter') || 'spec',
-                timeout: '60000',
+                timeout: '30000',
+                save: grunt.option('reporter-output'),
                 require: ['core/server/overrides'],
                 exit: true
             },
 
             unit: {
                 src: [
-                    'test/unit/**/*_spec.js'
+                    'core/test/unit/**/*_spec.js'
                 ]
             },
 
             acceptance: {
                 src: [
-                    'test/api-acceptance/**/*_spec.js',
-                    'test/frontend-acceptance/**/*_spec.js'
+                    'core/test/acceptance/**/*_spec.js'
                 ]
             },
 
             regression: {
                 src: [
-                    'test/regression/**/*_spec.js'
+                    'core/test/regression/**/*_spec.js'
                 ]
             },
 
@@ -171,7 +151,7 @@ const configureGrunt = function (grunt) {
                 bg: grunt.option('client') ? false : true,
                 stdout: function (chunk) {
                     // hide certain output to prevent confusion when running alongside server
-                    const filter = grunt.option('client') ? false : [
+                    var filter = grunt.option('client') ? false : [
                         /> ghost-admin/,
                         /^Livereload/,
                         /^Serving on/
@@ -188,22 +168,8 @@ const configureGrunt = function (grunt) {
                     }
                 },
                 stderr: function (chunk) {
-                    const skipFilter = grunt.option('client') ? false : [
-                        /- building/
-                    ].some(function (regexp) {
-                        return regexp.test(chunk);
-                    });
-
-                    const errorFilter = grunt.option('client') ? false : [
-                        /^>>/
-                    ].some(function (regexp) {
-                        return regexp.test(chunk);
-                    });
-
-                    if (!skipFilter) {
-                        hasBuiltClient = errorFilter ? hasBuiltClient : true;
-                        grunt.log.error(chunk);
-                    }
+                    hasBuiltClient = true;
+                    grunt.log.error(chunk);
                 }
             }
         },
@@ -216,34 +182,22 @@ const configureGrunt = function (grunt) {
             },
             master: {
                 command: function () {
-                    const upstream = grunt.option('upstream') || process.env.GHOST_UPSTREAM || 'upstream';
+                    var upstream = grunt.option('upstream') || process.env.GHOST_UPSTREAM || 'upstream';
                     grunt.log.writeln('Pulling down the latest master from ' + upstream);
                     return `
-                        git submodule sync && \
+                        git submodule sync
                         git submodule update
 
                         if ! git diff --exit-code --quiet --ignore-submodules=untracked; then
-                            echo "Working directory is not clean, do you have uncommitted changes? Please commit, stash or discard changes to continue."
+                            echo "Working directory is not clean, do you have uncommited changes? Please commit, stash or discard changes to continue."
                             exit 1
                         fi
 
                         git checkout master
-
-                        if git config remote.${upstream}.url > /dev/null; then
-                            git pull ${upstream} master
-                        else
-                            git pull origin master
-                        fi
-
-                        yarn && \
+                        git pull ${upstream} master
+                        yarn
                         git submodule foreach "
-                            git checkout master
-
-                            if git config remote.${upstream}.url > /dev/null; then
-                                git pull ${upstream} master
-                            else
-                                git pull origin master
-                            fi
+                            git checkout master && git pull ${upstream} master
                         "
                     `;
                 }
@@ -295,12 +249,21 @@ const configureGrunt = function (grunt) {
             }
         },
 
-        postcss: {
+        uglify: {
             prod: {
                 options: {
-                    processors: [
-                        require('cssnano')() // minify the result
-                    ]
+                    sourceMap: false
+                },
+                files: {
+                    'core/server/public/ghost-sdk.min.js': 'core/server/public/ghost-sdk.js'
+                }
+            }
+        },
+
+        cssnano: {
+            prod: {
+                options: {
+                    sourcemap: false
                 },
                 files: {
                     'core/server/public/ghost.min.css': 'core/server/public/ghost.css'
@@ -395,7 +358,7 @@ const configureGrunt = function (grunt) {
     grunt.registerTask('setTestEnv',
         'Use "testing" Ghost config; unless we are running on travis (then show queries for debugging)',
         function () {
-            process.env.NODE_ENV = process.env.NODE_ENV || 'testing';
+            process.env.NODE_ENV = process.env.TRAVIS ? process.env.NODE_ENV : 'testing';
             cfg.express.test.options.node_env = process.env.NODE_ENV;
         });
 
@@ -404,17 +367,17 @@ const configureGrunt = function (grunt) {
     //
     // `grunt test:unit/apps_spec.js` will run just the tests inside the apps_spec.js file
     //
-    // It works for any path relative to the /test/ folder. It will also run all the tests in a single directory
-    // You can also run a test with grunt test:test/unit/... to get bash autocompletion
+    // It works for any path relative to the core/test folder. It will also run all the tests in a single directory
+    // You can also run a test with grunt test:core/test/unit/... to get bash autocompletion
     //
     // `grunt test:regression/api` - runs the api regression tests
-    grunt.registerTask('test', 'Run a particular spec file from the /test/ directory e.g. `grunt test:unit/apps_spec.js`', function (test) {
+    grunt.registerTask('test', 'Run a particular spec file from the core/test directory e.g. `grunt test:unit/apps_spec.js`', function (test) {
         if (!test) {
             grunt.fail.fatal('No test provided. `grunt test` expects a filename. e.g.: `grunt test:unit/apps_spec.js`. Did you mean `npm test` or `grunt validate`?');
         }
 
-        if (!test.match(/test\//) && !test.match(/core\/server/)) {
-            test = 'test/' + test;
+        if (!test.match(/core\/test/) && !test.match(/core\/server/)) {
+            test = 'core/test/' + test;
         }
 
         // CASE: execute folder
@@ -434,7 +397,7 @@ const configureGrunt = function (grunt) {
     // so that the test environments do not need to build out the client files
     grunt.registerTask('stubClientFiles', function () {
         _.each(cfg.clientFiles, function (file) {
-            const filePath = path.resolve(cwd + '/core/' + file);
+            var filePath = path.resolve(cwd + '/core/' + file);
             fs.ensureFileSync(filePath);
         });
     });
@@ -497,11 +460,26 @@ const configureGrunt = function (grunt) {
         ['test-setup', 'mochacli:acceptance']
     );
 
+    // #### Master Warning *(Utility Task)*
+    // Warns git users not ot use the `master` branch in production.
+    // `master` is an unstable branch and shouldn't be used in production as you run the risk of ending up with a
+    // database in an unrecoverable state. Instead there is a branch called `stable` which is the equivalent of the
+    // release zip for git users.
+    grunt.registerTask('master-warn',
+        'Outputs a warning to runners of grunt prod, that master shouldn\'t be used for live blogs',
+        function () {
+            grunt.log.writeln(chalk.red(
+                'Use the ' + chalk.bold('stable') + ' branch for live blogs. '
+                + chalk.bold.underline('Never') + ' master!'
+            ));
+            grunt.log.writeln('>', 'Always two there are, no more, no less. A master and a ' + chalk.bold('stable') + '.');
+        });
+
     // ## Building assets
     //
     // Ghost's GitHub repository contains the un-built source code for Ghost. If you're looking for the already
     // built release zips, you can get these from the [release page](https://github.com/TryGhost/Ghost/releases) on
-    // GitHub or from https://ghost.org/docs/install/. These zip files are created using the [grunt release](#release)
+    // GitHub or from https://ghost.org/download. These zip files are created using the [grunt release](#release)
     // task.
     //
     // If you want to work on Ghost core, or you want to use the source files from GitHub, then you have to build
@@ -548,7 +526,7 @@ const configureGrunt = function (grunt) {
     //
     // It is otherwise the same as running `grunt`, but is only used when running Ghost in the `production` env.
     grunt.registerTask('prod', 'Build JS & templates for production',
-        ['subgrunt:prod', 'postcss:prod']);
+        ['subgrunt:prod', 'uglify:prod', 'cssnano:prod', 'master-warn']);
 
     // ### Live reload
     // `grunt dev` - build assets on the fly whilst developing
@@ -590,6 +568,7 @@ const configureGrunt = function (grunt) {
     grunt.registerTask('release',
         'Release task - creates a final built zip\n' +
         ' - Do our standard build steps \n' +
+        ' - Run all tests(acceptance + regression + unit) \n' +
         ' - Copy files to release-folder/#/#{version} directory\n' +
         ' - Clean out unnecessary files (travis, .git*, etc)\n' +
         ' - Zip files in release-folder to dist-folder/#{version} directory',
@@ -613,21 +592,14 @@ const configureGrunt = function (grunt) {
                     dest: 'core/server/web/admin/views/default.html'
                 }]
             });
-
-            if (!grunt.option('skip-update')) {
-                grunt.task
-                    .run('update_submodules:pinned')
-                    .run('subgrunt:init');
+            if (!grunt.option('skip-tests')) {
+                grunt.task.run(['update_submodules:pinned', 'subgrunt:init', 'test-all', 'clean:built', 'clean:tmp', 'prod', 'clean:release', 'copy:admin_html', 'copy:release', 'compress:release']);
+            } else {
+                grunt.log.writeln(chalk.red(
+                    chalk.bold('Skipping tests...')
+                ));
+                grunt.task.run(['update_submodules:pinned', 'subgrunt:init', 'clean:built', 'clean:tmp', 'prod', 'clean:release', 'copy:admin_html', 'copy:release', 'compress:release']);
             }
-
-            grunt.task
-                .run('clean:built')
-                .run('clean:tmp')
-                .run('prod')
-                .run('clean:release')
-                .run('copy:admin_html')
-                .run('copy:release')
-                .run('compress:release');
         }
     );
 };

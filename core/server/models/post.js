@@ -3,16 +3,15 @@ const _ = require('lodash');
 const uuid = require('uuid');
 const moment = require('moment');
 const Promise = require('bluebird');
-const {sequence} = require('@tryghost/promise');
-const {i18n} = require('../lib/common');
-const errors = require('@tryghost/errors');
+const sequence = require('../lib/promise/sequence');
+const common = require('../lib/common');
 const htmlToText = require('html-to-text');
 const ghostBookshelf = require('./base');
-const config = require('../../shared/config');
+const config = require('../config');
 const settingsCache = require('../services/settings/cache');
-const mobiledocLib = require('../lib/mobiledoc');
+const converters = require('../lib/mobiledoc/converters');
 const relations = require('./relations');
-const urlUtils = require('../../shared/url-utils');
+const urlUtils = require('../lib/url-utils');
 const MOBILEDOC_REVISIONS_COUNT = 10;
 const ALL_STATUSES = ['published', 'draft', 'scheduled'];
 
@@ -53,30 +52,17 @@ Post = ghostBookshelf.Model.extend({
             uuid: uuid.v4(),
             status: 'draft',
             featured: false,
-            type: 'post',
-            visibility: visibility,
-            email_recipient_filter: 'none'
+            page: false,
+            visibility: visibility
         };
     },
 
-    relationships: ['tags', 'authors', 'mobiledoc_revisions', 'posts_meta'],
+    relationships: ['tags', 'authors', 'mobiledoc_revisions'],
 
     // NOTE: look up object, not super nice, but was easy to implement
     relationshipBelongsTo: {
         tags: 'tags',
-        authors: 'users',
-        posts_meta: 'posts_meta'
-    },
-
-    relationsMeta: {
-        posts_meta: {
-            targetTableName: 'posts_meta',
-            foreignKey: 'post_id'
-        },
-        email: {
-            targetTableName: 'emails',
-            foreignKey: 'post_id'
-        }
+        authors: 'users'
     },
 
     /**
@@ -94,48 +80,12 @@ Post = ghostBookshelf.Model.extend({
         return filteredKeys;
     },
 
-    orderAttributes: function orderAttributes() {
-        let keys = ghostBookshelf.Model.prototype.orderAttributes.apply(this, arguments);
-
-        // extend ordered keys with post_meta keys
-        let postsMetaKeys = _.without(ghostBookshelf.model('PostsMeta').prototype.orderAttributes(), 'posts_meta.id', 'posts_meta.post_id');
-
-        return [...keys, ...postsMetaKeys];
-    },
-
-    orderRawQuery: function orderRawQuery(field, direction, withRelated) {
-        if (field === 'email.open_rate' && withRelated && withRelated.indexOf('email') > -1) {
-            return {
-                // *1.0 is needed on one of the columns to prevent sqlite from
-                // performing integer division rounding and always giving 0.
-                // Order by emails.track_opens desc first so we always tracked emails
-                // before untracked emails in the posts list.
-                orderByRaw: `
-                    emails.track_opens desc,
-                    emails.opened_count * 1.0 / emails.email_count * 100 ${direction},
-                    posts.created_at desc`,
-                eagerLoad: 'email.open_rate'
-            };
-        }
-    },
-
-    filterExpansions: function filterExpansions() {
-        const postsMetaKeys = _.without(ghostBookshelf.model('PostsMeta').prototype.orderAttributes(), 'posts_meta.id', 'posts_meta.post_id');
-
-        return postsMetaKeys.map((pmk) => {
-            return {
-                key: pmk.split('.')[1],
-                replacement: pmk
-            };
-        });
-    },
-
     emitChange: function emitChange(event, options = {}) {
         let eventToTrigger;
-        let resourceType = this.get('type');
+        let resourceType = this.get('page') ? 'page' : 'post';
 
         if (options.usePreviousAttribute) {
-            resourceType = this.previous('type');
+            resourceType = this.previous('page') ? 'page' : 'post';
         }
 
         eventToTrigger = resourceType + '.' + event;
@@ -159,7 +109,7 @@ Post = ghostBookshelf.Model.extend({
             return;
         }
 
-        const status = model.get('status');
+        var status = model.get('status');
 
         model.emitChange('added', options);
 
@@ -176,7 +126,7 @@ Post = ghostBookshelf.Model.extend({
         model.isScheduled = model.get('status') === 'scheduled';
         model.wasPublished = model.previous('status') === 'published';
         model.wasScheduled = model.previous('status') === 'scheduled';
-        model.resourceTypeChanging = model.get('type') !== model.previous('type');
+        model.resourceTypeChanging = model.get('page') !== model.previous('page');
         model.publishedAtHasChanged = model.hasDateChanged('published_at');
         model.needsReschedule = model.publishedAtHasChanged && model.isScheduled;
 
@@ -263,15 +213,15 @@ Post = ghostBookshelf.Model.extend({
          * For the reason above, `detached` handler is using the scope of `detaching`
          * to access the models that are not present in `detached`.
          */
-        model.related('tags').once('detaching', function detachingTags(collection, tag) {
-            model.related('tags').once('detached', function detachedTags(detachedCollection, response, options) {
+        model.related('tags').once('detaching', function onDetached(collection, tag) {
+            model.related('tags').once('detached', function onDetached(detachedCollection, response, options) {
                 tag.emitChange('detached', options);
                 model.emitChange('tag.detached', options);
             });
         });
 
-        model.related('tags').once('attaching', function tagsAttaching(collection, tags) {
-            model.related('tags').once('attached', function tagsAttached(detachedCollection, response, options) {
+        model.related('tags').once('attaching', function onDetached(collection, tags) {
+            model.related('tags').once('attached', function onDetached(detachedCollection, response, options) {
                 tags.forEach((tag) => {
                     tag.emitChange('attached', options);
                     model.emitChange('tag.attached', options);
@@ -279,14 +229,14 @@ Post = ghostBookshelf.Model.extend({
             });
         });
 
-        model.related('authors').once('detaching', function authorsDetaching(collection, author) {
-            model.related('authors').once('detached', function authorsDetached(detachedCollection, response, options) {
+        model.related('authors').once('detaching', function onDetached(collection, author) {
+            model.related('authors').once('detached', function onDetached(detachedCollection, response, options) {
                 author.emitChange('detached', options);
             });
         });
 
-        model.related('authors').once('attaching', function authorsAttaching(collection, authors) {
-            model.related('authors').once('attached', function authorsAttached(detachedCollection, response, options) {
+        model.related('authors').once('attaching', function onDetached(collection, authors) {
+            model.related('authors').once('attached', function onDetached(detachedCollection, response, options) {
                 authors.forEach(author => author.emitChange('attached', options));
             });
         });
@@ -308,31 +258,29 @@ Post = ghostBookshelf.Model.extend({
         });
     },
 
-    onSaving: async function onSaving(model, attr, options) {
+    onSaving: function onSaving(model, attr, options) {
         options = options || {};
 
-        const self = this;
-        let title;
-        let i;
-
-        // Variables to make the slug checking more readable
-        const newTitle = this.get('title');
-
-        const newStatus = this.get('status');
-        const olderStatus = this.previous('status');
-        const prevTitle = this.previous('title');
-        const prevSlug = this.previous('slug');
-        const publishedAt = this.get('published_at');
-        const publishedAtHasChanged = this.hasDateChanged('published_at', {beforeWrite: true});
-        const generatedFields = ['html', 'plaintext'];
-        let tagsToSave;
-        const ops = [];
+        var self = this,
+            title,
+            i,
+            // Variables to make the slug checking more readable
+            newTitle = this.get('title'),
+            newStatus = this.get('status'),
+            olderStatus = this.previous('status'),
+            prevTitle = this.previous('title'),
+            prevSlug = this.previous('slug'),
+            publishedAt = this.get('published_at'),
+            publishedAtHasChanged = this.hasDateChanged('published_at', {beforeWrite: true}),
+            generatedFields = ['html', 'plaintext'],
+            tagsToSave,
+            ops = [];
 
         // CASE: disallow published -> scheduled
         // @TODO: remove when we have versioning based on updated_at
         if (newStatus !== olderStatus && newStatus === 'scheduled' && olderStatus === 'published') {
-            return Promise.reject(new errors.ValidationError({
-                message: i18n.t('errors.models.post.isAlreadyPublished', {key: 'status'})
+            return Promise.reject(new common.errors.ValidationError({
+                message: common.i18n.t('errors.models.post.isAlreadyPublished', {key: 'status'})
             }));
         }
 
@@ -345,12 +293,12 @@ Post = ghostBookshelf.Model.extend({
         // CASE: both page and post can get scheduled
         if (newStatus === 'scheduled') {
             if (!publishedAt) {
-                return Promise.reject(new errors.ValidationError({
-                    message: i18n.t('errors.models.post.valueCannotBeBlank', {key: 'published_at'})
+                return Promise.reject(new common.errors.ValidationError({
+                    message: common.i18n.t('errors.models.post.valueCannotBeBlank', {key: 'published_at'})
                 }));
             } else if (!moment(publishedAt).isValid()) {
-                return Promise.reject(new errors.ValidationError({
-                    message: i18n.t('errors.models.post.valueCannotBeBlank', {key: 'published_at'})
+                return Promise.reject(new common.errors.ValidationError({
+                    message: common.i18n.t('errors.models.post.valueCannotBeBlank', {key: 'published_at'})
                 }));
                 // CASE: to schedule/reschedule a post, a minimum diff of x minutes is needed (default configured is 2minutes)
             } else if (
@@ -359,8 +307,8 @@ Post = ghostBookshelf.Model.extend({
                 !options.importing &&
                 (!options.context || !options.context.internal)
             ) {
-                return Promise.reject(new errors.ValidationError({
-                    message: i18n.t('errors.models.post.expectedPublishedAtInFuture', {
+                return Promise.reject(new common.errors.ValidationError({
+                    message: common.i18n.t('errors.models.post.expectedPublishedAtInFuture', {
                         cannotScheduleAPostBeforeInMinutes: config.get('times').cannotScheduleAPostBeforeInMinutes
                     })
                 }));
@@ -385,22 +333,6 @@ Post = ghostBookshelf.Model.extend({
             this.set('tags', tagsToSave);
         }
 
-        /**
-         * CASE: Attach id to update existing posts_meta entry for a post
-         * CASE: Don't create new posts_meta entry if post meta is empty
-         */
-        if (!_.isUndefined(this.get('posts_meta')) && !_.isNull(this.get('posts_meta'))) {
-            let postsMetaData = this.get('posts_meta');
-            let relatedModelId = model.related('posts_meta').get('id');
-            let hasNoData = !_.values(postsMetaData).some(x => !!x);
-            if (relatedModelId && !_.isEmpty(postsMetaData)) {
-                postsMetaData.id = relatedModelId;
-                this.set('posts_meta', postsMetaData);
-            } else if (_.isEmpty(postsMetaData) || hasNoData) {
-                this.set('posts_meta', null);
-            }
-        }
-
         this.handleAttachedModels(model);
 
         ghostBookshelf.Model.prototype.onSaving.apply(this, arguments);
@@ -415,7 +347,7 @@ Post = ghostBookshelf.Model.extend({
         }
 
         if (!this.get('mobiledoc')) {
-            this.set('mobiledoc', JSON.stringify(mobiledocLib.blankDocument));
+            this.set('mobiledoc', JSON.stringify(converters.mobiledocConverter.blankStructure()));
         }
 
         // ensure all URLs are stored as relative
@@ -436,60 +368,43 @@ Post = ghostBookshelf.Model.extend({
             }
         };
 
-        Object.entries(urlTransformMap).forEach(([attrToTransform, transform]) => {
+        Object.entries(urlTransformMap).forEach(([attr, transform]) => {
             let method = transform;
-            let transformOptions = {};
+            let options = {};
 
             if (typeof transform === 'object') {
                 method = transform.method;
-                transformOptions = transform.options || {};
+                options = transform.options || {};
             }
 
-            if (this.hasChanged(attrToTransform) && this.get(attrToTransform)) {
-                const transformedValue = urlUtils[method](this.get(attrToTransform), transformOptions);
-                this.set(attrToTransform, transformedValue);
+            if (this.hasChanged(attr) && this.get(attr)) {
+                const transformedValue = urlUtils[method](this.get(attr), options);
+                this.set(attr, transformedValue);
             }
         });
 
-        // If we're force re-rendering we want to make sure that all image cards
-        // have original dimensions stored in the payload for use by card renderers
-        if (options.force_rerender) {
-            this.set('mobiledoc', await mobiledocLib.populateImageSizes(this.get('mobiledoc')));
-        }
-
         // CASE: mobiledoc has changed, generate html
-        // CASE: ?force_rerender=true passed via Admin API
         // CASE: html is null, but mobiledoc exists (only important for migrations & importing)
-        if (
-            this.hasChanged('mobiledoc')
-            || options.force_rerender
-            || (!this.get('html') && (options.migrating || options.importing))
-        ) {
+        if (this.hasChanged('mobiledoc') || (!this.get('html') && (options.migrating || options.importing))) {
             try {
-                this.set('html', mobiledocLib.mobiledocHtmlRenderer.render(JSON.parse(this.get('mobiledoc'))));
+                this.set('html', converters.mobiledocConverter.render(JSON.parse(this.get('mobiledoc'))));
             } catch (err) {
-                throw new errors.ValidationError({
+                throw new common.errors.ValidationError({
                     message: 'Invalid mobiledoc structure.',
-                    help: 'https://ghost.org/docs/publishing/'
+                    help: 'https://ghost.org/docs/concepts/posts/'
                 });
             }
         }
 
         if (this.hasChanged('html') || !this.get('plaintext')) {
-            let plaintext;
-
-            if (this.get('html') === null) {
-                plaintext = null;
-            } else {
-                plaintext = htmlToText.fromString(this.get('html'), {
-                    wordwrap: 80,
-                    ignoreImage: true,
-                    hideLinkHrefIfSameAsText: true,
-                    preserveNewlines: true,
-                    returnDomByDefault: true,
-                    uppercaseHeadings: false
-                });
-            }
+            const plaintext = htmlToText.fromString(this.get('html'), {
+                wordwrap: 80,
+                ignoreImage: true,
+                hideLinkHrefIfSameAsText: true,
+                preserveNewlines: true,
+                returnDomByDefault: true,
+                uppercaseHeadings: false
+            });
 
             // CASE: html is e.g. <p></p>
             // @NOTE: Otherwise we will always update the resource to `plaintext: ''` and Bookshelf thinks that this
@@ -501,7 +416,7 @@ Post = ghostBookshelf.Model.extend({
 
         // disabling sanitization until we can implement a better version
         if (!options.importing) {
-            title = this.get('title') || i18n.t('errors.models.post.untitled');
+            title = this.get('title') || common.i18n.t('errors.models.post.untitled');
             this.set('title', _.toString(title).trim());
         }
 
@@ -524,22 +439,6 @@ Post = ghostBookshelf.Model.extend({
             }
         }
 
-        // email_recipient_filter is read-only and should only be set using a query param when publishing/scheduling
-        if (options.email_recipient_filter && options.email_recipient_filter !== 'none' && this.hasChanged('status') && (newStatus === 'published' || newStatus === 'scheduled')) {
-            this.set('email_recipient_filter', options.email_recipient_filter);
-        }
-
-        // ensure draft posts have the email_recipient_filter reset unless an email has already been sent
-        if (newStatus === 'draft' && this.hasChanged('status')) {
-            ops.push(function ensureSendEmailWhenPublishedIsUnchanged() {
-                return self.related('email').fetch({transacting: options.transacting}).then((email) => {
-                    if (!email) {
-                        self.set('email_recipient_filter', 'none');
-                    }
-                });
-            });
-        }
-
         // If a title is set, not the same as the old title, a draft post, and has never been published
         if (prevTitle !== undefined && newTitle !== prevTitle && newStatus === 'draft' && !publishedAt) {
             ops.push(function updateSlug() {
@@ -550,7 +449,7 @@ Post = ghostBookshelf.Model.extend({
                         // After the new slug is found, do another generate for the old title to compare it to the old slug
                         return ghostBookshelf.Model.generateSlug(Post, prevTitle,
                             {status: 'all', transacting: options.transacting, importing: options.importing}
-                        ).then(function prevTitleSlugGenerated(prevTitleSlug) {
+                        ).then(function then(prevTitleSlug) {
                             // If the old slug is the same as the slug that was generated from the old title
                             // then set a new slug. If it is not the same, means was set by the user
                             if (prevTitleSlug === prevSlug) {
@@ -655,14 +554,6 @@ Post = ghostBookshelf.Model.extend({
         return this.hasMany('MobiledocRevision', 'post_id');
     },
 
-    posts_meta: function postsMeta() {
-        return this.hasOne('PostsMeta', 'post_id');
-    },
-
-    email: function email() {
-        return this.hasOne('Email', 'post_id');
-    },
-
     /**
      * @NOTE:
      * If you are requesting models with `columns`, you try to only receive some fields of the model/s.
@@ -700,8 +591,8 @@ Post = ghostBookshelf.Model.extend({
      * Otherwise we return what is requested e.g. `?formats=mobiledoc,plaintext`
      */
     formatsToJSON: function formatsToJSON(attrs, options) {
-        const defaultFormats = ['html'];
-        const formatsToKeep = options.formats || defaultFormats;
+        var defaultFormats = ['html'],
+            formatsToKeep = options.formats || defaultFormats;
 
         // Iterate over all known formats, and if they are not in the keep list, remove them
         _.each(Post.allowedFormats, function (format) {
@@ -714,13 +605,20 @@ Post = ghostBookshelf.Model.extend({
     },
 
     toJSON: function toJSON(unfilteredOptions) {
-        const options = Post.filterOptions(unfilteredOptions, 'toJSON');
-        let attrs = ghostBookshelf.Model.prototype.toJSON.call(this, options);
+        var options = Post.filterOptions(unfilteredOptions, 'toJSON'),
+            attrs = ghostBookshelf.Model.prototype.toJSON.call(this, options);
 
         attrs = this.formatsToJSON(attrs, options);
 
         // CASE: never expose the revisions
         delete attrs.mobiledoc_revisions;
+
+        // expose canonical_url only for API v2 calls
+        // NOTE: this can be removed when API v0.1 is dropped. A proper solution for field
+        //       differences on resources like this would be an introduction of API output schema
+        if (!_.get(unfilteredOptions, 'extraProperties', []).includes('canonical_url')) {
+            delete attrs.canonical_url;
+        }
 
         // If the current column settings allow it...
         if (!options.columns || (options.columns && options.columns.indexOf('primary_tag') > -1)) {
@@ -734,44 +632,39 @@ Post = ghostBookshelf.Model.extend({
 
         return attrs;
     },
-
-    // NOTE: overloads models base method to take `post_meta` changes into account
-    wasChanged() {
-        if (!this._changed) {
-            return true;
-        }
-
-        const postMetaChanged = this.relations.posts_meta && this.relations.posts_meta._changed && Object.keys(this.relations.posts_meta._changed).length;
-
-        if (!Object.keys(this._changed).length && !postMetaChanged) {
-            return false;
-        }
-
-        return true;
-    },
-
     enforcedFilters: function enforcedFilters(options) {
         return options.context && options.context.public ? 'status:published' : null;
     },
-
     defaultFilters: function defaultFilters(options) {
         if (options.context && options.context.internal) {
             return null;
         }
 
-        return options.context && options.context.public ? 'type:post' : 'type:post+status:published';
+        return options.context && options.context.public ? 'page:false' : 'page:false+status:published';
     },
 
     /**
-     * You can pass an extra `status=VALUES` field.
+     * You can pass an extra `status=VALUES` or "staticPages" field.
      * Long-Term: We should deprecate these short cuts and force users to use the filter param.
      */
     extraFilters: function extraFilters(options) {
-        if (!options.status) {
+        if (!options.staticPages && !options.status) {
             return null;
         }
 
         let filter = null;
+
+        // CASE: "staticPages" is passed
+        if (options.staticPages && options.staticPages !== 'all') {
+            // CASE: convert string true/false to boolean
+            if (!_.isBoolean(options.staticPages)) {
+                options.staticPages = _.includes(['true', '1'], options.staticPages);
+            }
+
+            filter = `page:${options.staticPages}`;
+        } else if (options.staticPages === 'all') {
+            filter = 'page:[true, false]';
+        }
 
         // CASE: "status" is passed, combine filters
         if (options.status && options.status !== 'all') {
@@ -791,6 +684,7 @@ Post = ghostBookshelf.Model.extend({
         }
 
         delete options.status;
+        delete options.staticPages;
         return filter;
     },
 
@@ -851,17 +745,17 @@ Post = ghostBookshelf.Model.extend({
      * @return {Array} Keys allowed in the `options` hash of the model's method.
      */
     permittedOptions: function permittedOptions(methodName) {
-        let options = ghostBookshelf.Model.permittedOptions.call(this, methodName);
+        var options = ghostBookshelf.Model.permittedOptions.call(this, methodName),
 
-        // whitelists for the `options` hash argument on methods, by method name.
-        // these are the only options that can be passed to Bookshelf / Knex.
-        const validOptions = {
-            findOne: ['columns', 'importing', 'withRelated', 'require', 'filter'],
-            findPage: ['status'],
-            findAll: ['columns', 'filter'],
-            destroy: ['destroyAll', 'destroyBy'],
-            edit: ['filter', 'email_recipient_filter', 'force_rerender']
-        };
+            // whitelists for the `options` hash argument on methods, by method name.
+            // these are the only options that can be passed to Bookshelf / Knex.
+            validOptions = {
+                findOne: ['columns', 'importing', 'withRelated', 'require', 'filter'],
+                findPage: ['status', 'staticPages'],
+                findAll: ['columns', 'filter'],
+                destroy: ['destroyAll', 'destroyBy'],
+                edit: ['filter']
+            };
 
         // The post model additionally supports having a formats option
         options.push('formats');
@@ -878,20 +772,10 @@ Post = ghostBookshelf.Model.extend({
      * receive all fields including relations. Otherwise you can't rely on a consistent flow. And we want to avoid
      * that event listeners have to re-fetch a resource. This function is used in the context of inserting
      * and updating resources. We won't return the relations by default for now.
-     *
-     * We also always fetch posts metadata to keep current behavior consistent
      */
     defaultRelations: function defaultRelations(methodName, options) {
         if (['edit', 'add', 'destroy'].indexOf(methodName) !== -1) {
             options.withRelated = _.union(['authors', 'tags'], options.withRelated || []);
-        }
-
-        const META_ATTRIBUTES = _.without(ghostBookshelf.model('PostsMeta').prototype.permittedAttributes(), 'id', 'post_id');
-
-        // NOTE: only include post_meta relation when requested in 'columns' or by default
-        //       optimization is needed to be able to perform .findAll on large SQLite datasets
-        if (!options.columns || (options.columns && _.intersection(META_ATTRIBUTES, options.columns).length)) {
-            options.withRelated = _.union(['posts_meta'], options.withRelated || []);
         }
 
         return options;
@@ -904,8 +788,8 @@ Post = ghostBookshelf.Model.extend({
      * @return {Object} The filtered results of the passed in data, containing only what's allowed in the schema.
      */
     filterData: function filterData(data) {
-        const filteredData = ghostBookshelf.Model.filterData.apply(this, arguments);
-        const extraData = _.pick(data, this.prototype.relationships);
+        var filteredData = ghostBookshelf.Model.filterData.apply(this, arguments),
+            extraData = _.pick(data, this.prototype.relationships);
 
         _.merge(filteredData, extraData);
         return filteredData;
@@ -953,13 +837,6 @@ Post = ghostBookshelf.Model.extend({
                                 // Pass along the updated attributes for checking status changes
                                 found._previousAttributes = post._previousAttributes;
                                 found._changed = post._changed;
-
-                                // NOTE: `posts_meta` fields are equivalent in terms of "wasChanged" logic to the rest of posts's table fields.
-                                //       Keeping track of them is needed to check if anything was changed in post's resource.
-                                if (found.relations.posts_meta) {
-                                    found.relations.posts_meta._changed = post.relations.posts_meta._changed;
-                                }
-
                                 return found;
                             }
                         });
@@ -1023,7 +900,7 @@ Post = ghostBookshelf.Model.extend({
     },
 
     // NOTE: the `authors` extension is the parent of the post model. It also has a permissible function.
-    permissible: function permissible(postModel, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasApiKeyPermission) {
+    permissible: function permissible(postModel, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasAppPermission, hasApiKeyPermission) {
         let isContributor;
         let isOwner;
         let isAdmin;
@@ -1047,7 +924,7 @@ Post = ghostBookshelf.Model.extend({
 
         isContributor = loadedPermissions.user && _.some(loadedPermissions.user.roles, {name: 'Contributor'});
         isOwner = loadedPermissions.user && _.some(loadedPermissions.user.roles, {name: 'Owner'});
-        isAdmin = loadedPermissions.user && _.some(loadedPermissions.user.roles, {name: 'Administrator'});
+        isAdmin = loadedPermissions.user && _.some(loadedPermissions.user.roles, {name: 'Admin'});
         isEditor = loadedPermissions.user && _.some(loadedPermissions.user.roles, {name: 'Editor'});
         isIntegration = loadedPermissions.apiKey && _.some(loadedPermissions.apiKey.roles, {name: 'Admin Integration'});
 
@@ -1078,12 +955,12 @@ Post = ghostBookshelf.Model.extend({
             excludedAttrs.push('tags');
         }
 
-        if (hasUserPermission && hasApiKeyPermission) {
+        if (hasUserPermission && hasApiKeyPermission && hasAppPermission) {
             return Promise.resolve({excludedAttrs});
         }
 
-        return Promise.reject(new errors.NoPermissionError({
-            message: i18n.t('errors.models.post.notEnoughPermission')
+        return Promise.reject(new common.errors.NoPermissionError({
+            message: common.i18n.t('errors.models.post.notEnoughPermission')
         }));
     }
 });

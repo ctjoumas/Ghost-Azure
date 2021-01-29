@@ -1,4 +1,3 @@
-const url = require('url');
 const debug = require('ghost-ignition').debug('api:shared:headers');
 const Promise = require('bluebird');
 const INVALIDATE_ALL = '/*';
@@ -99,54 +98,44 @@ module.exports = {
      * @description Get header based on ctrl configuration.
      *
      * @param {Object} result - API response
-     * @param {Object} apiConfigHeaders
-     * @param {Object} frame
+     * @param {Object} apiConfig
      * @return {Promise}
      */
-    async get(result, apiConfigHeaders = {}, frame) {
+    get(result, apiConfig = {}) {
         let headers = {};
 
-        if (apiConfigHeaders.disposition) {
-            const dispositionHeader = await disposition[apiConfigHeaders.disposition.type](result, apiConfigHeaders.disposition);
+        return Promise.resolve()
+            .then(() => {
+                let header;
 
-            if (dispositionHeader) {
-                Object.assign(headers, dispositionHeader);
-            }
-        }
+                if (apiConfig.disposition) {
+                    header = disposition[apiConfig.disposition.type](result, apiConfig.disposition);
+                }
 
-        if (apiConfigHeaders.cacheInvalidate) {
-            const cacheInvalidationHeader = cacheInvalidate(result, apiConfigHeaders.cacheInvalidate);
+                return header;
+            })
+            .then((header) => {
+                if (header) {
+                    Object.assign(headers, header);
+                }
+            })
+            .then(() => {
+                let header;
 
-            if (cacheInvalidationHeader) {
-                Object.assign(headers, cacheInvalidationHeader);
-            }
-        }
+                if (apiConfig.cacheInvalidate) {
+                    header = cacheInvalidate(result, apiConfig.cacheInvalidate);
+                }
 
-        const locationHeaderDisabled = apiConfigHeaders && apiConfigHeaders.location === false;
-        const hasFrameData = frame
-            && (frame.method === 'add')
-            && result[frame.docName]
-            && result[frame.docName][0]
-            && result[frame.docName][0].id;
-
-        if (!locationHeaderDisabled && hasFrameData) {
-            const protocol = (frame.original.url.secure === false) ? 'http://' : 'https://';
-            const resourceId = result[frame.docName][0].id;
-
-            let locationURL = url.resolve(`${protocol}${frame.original.url.host}`,frame.original.url.pathname);
-            if (!locationURL.endsWith('/')) {
-                locationURL += '/';
-            }
-            locationURL += `${resourceId}/`;
-
-            const locationHeader = {
-                Location: locationURL
-            };
-
-            Object.assign(headers, locationHeader);
-        }
-
-        debug(headers);
-        return headers;
+                return header;
+            })
+            .then((header) => {
+                if (header) {
+                    Object.assign(headers, header);
+                }
+            })
+            .then(() => {
+                debug(headers);
+                return headers;
+            });
     }
 };

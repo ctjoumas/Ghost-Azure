@@ -2,8 +2,7 @@ const debug = require('ghost-ignition').debug('api:v2:utils:permissions');
 const Promise = require('bluebird');
 const _ = require('lodash');
 const permissions = require('../../../services/permissions');
-const {i18n} = require('../../../lib/common');
-const errors = require('@tryghost/errors');
+const common = require('../../../lib/common');
 
 /**
  * @description Handle requests, which need authentication.
@@ -50,19 +49,19 @@ const nonePublicAuth = (apiConfig, frame) => {
             frame.data[apiConfig.docName][0] = _.omit(frame.data[apiConfig.docName][0], result.excludedAttrs);
         }
     }).catch((err) => {
-        if (err instanceof errors.NoPermissionError) {
-            err.message = i18n.t('errors.api.utils.noPermissionToCall', {
+        if (err instanceof common.errors.NoPermissionError) {
+            err.message = common.i18n.t('errors.api.utils.noPermissionToCall', {
                 method: apiConfig.method,
                 docName: apiConfig.docName
             });
             return Promise.reject(err);
         }
 
-        if (errors.utils.isIgnitionError(err)) {
+        if (common.errors.utils.isIgnitionError(err)) {
             return Promise.reject(err);
         }
 
-        return Promise.reject(new errors.GhostError({
+        return Promise.reject(new common.errors.GhostError({
             err: err
         }));
     });

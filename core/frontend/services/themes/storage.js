@@ -8,11 +8,8 @@ const themeLoader = require('./loader');
 const toJSON = require('./to-json');
 
 const settingsCache = require('../../../server/services/settings/cache');
-const {i18n} = require('../proxy');
-const logging = require('../../../shared/logging');
-const errors = require('@tryghost/errors');
+const common = require('../../../server/lib/common');
 const debug = require('ghost-ignition').debug('api:themes');
-const ObjectID = require('bson-objectid');
 
 let themeStorage;
 
@@ -27,8 +24,8 @@ module.exports = {
         const theme = list.get(themeName);
 
         if (!theme) {
-            return Promise.reject(new errors.BadRequestError({
-                message: i18n.t('errors.api.themes.invalidThemeName')
+            return Promise.reject(new common.errors.BadRequestError({
+                message: common.i18n.t('errors.api.themes.invalidThemeName')
             }));
         }
 
@@ -38,12 +35,11 @@ module.exports = {
     },
     setFromZip: (zip) => {
         const shortName = getStorage().getSanitizedFileName(zip.name.split('.zip')[0]);
-        const backupName = `${shortName}_${ObjectID()}`;
 
         // check if zip name is casper.zip
         if (zip.name === 'casper.zip') {
-            throw new errors.ValidationError({
-                message: i18n.t('errors.api.themes.overrideCasper')
+            throw new common.errors.ValidationError({
+                message: common.i18n.t('errors.api.themes.overrideCasper')
             });
         }
 
@@ -56,9 +52,9 @@ module.exports = {
                 return getStorage().exists(shortName);
             })
             .then((themeExists) => {
-                // CASE: move the existing theme to a backup folder
+                // CASE: delete existing theme
                 if (themeExists) {
-                    return getStorage().rename(shortName, backupName);
+                    return getStorage().delete(shortName);
                 }
             })
             .then(() => {
@@ -88,40 +84,34 @@ module.exports = {
             })
             .finally(() => {
                 // @TODO: we should probably do this as part of saving the theme
-                // CASE: remove extracted dir from gscan happens in background
+                // CASE: remove extracted dir from gscan
+                // happens in background
                 if (checkedTheme) {
                     fs.remove(checkedTheme.path)
                         .catch((err) => {
-                            logging.error(new errors.GhostError({err: err}));
+                            common.logging.error(new common.errors.GhostError({err: err}));
                         });
                 }
-
-                // CASE: remove the backup we created earlier
-                getStorage()
-                    .delete(backupName)
-                    .catch((err) => {
-                        logging.error(new errors.GhostError({err: err}));
-                    });
             });
     },
     destroy: function (themeName) {
         if (themeName === 'casper') {
-            throw new errors.ValidationError({
-                message: i18n.t('errors.api.themes.destroyCasper')
+            throw new common.errors.ValidationError({
+                message: common.i18n.t('errors.api.themes.destroyCasper')
             });
         }
 
         if (themeName === settingsCache.get('active_theme')) {
-            throw new errors.ValidationError({
-                message: i18n.t('errors.api.themes.destroyActive')
+            throw new common.errors.ValidationError({
+                message: common.i18n.t('errors.api.themes.destroyActive')
             });
         }
 
         const theme = list.get(themeName);
 
         if (!theme) {
-            throw new errors.NotFoundError({
-                message: i18n.t('errors.api.themes.themeDoesNotExist')
+            throw new common.errors.NotFoundError({
+                message: common.i18n.t('errors.api.themes.themeDoesNotExist')
             });
         }
 

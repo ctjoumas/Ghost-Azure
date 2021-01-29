@@ -1,7 +1,6 @@
 const api = require('./index');
-const config = require('../../../shared/config');
-const {i18n} = require('../../lib/common');
-const errors = require('@tryghost/errors');
+const config = require('../../config');
+const common = require('../../lib/common');
 const web = require('../../web');
 const models = require('../../models');
 const auth = require('../../services/auth');
@@ -47,7 +46,7 @@ module.exports = {
             return models.User.findOne({role: 'Owner', status: 'all'})
                 .then((owner) => {
                     if (owner.id !== frame.options.context.user) {
-                        throw new errors.NoPermissionError({message: i18n.t('errors.api.authentication.notTheBlogOwner')});
+                        throw new common.errors.NoPermissionError({message: common.i18n.t('errors.api.authentication.notTheBlogOwner')});
                     }
                 });
         },
