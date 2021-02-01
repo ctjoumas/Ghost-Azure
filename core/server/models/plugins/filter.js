@@ -1,5 +1,6 @@
 const debug = require('ghost-ignition').debug('models:plugins:filter');
-const common = require('../../lib/common');
+const {i18n} = require('../../lib/common');
+const errors = require('@tryghost/errors');
 
 const RELATIONS = {
     tags: {
@@ -16,30 +17,51 @@ const RELATIONS = {
         joinTable: 'posts_authors',
         joinFrom: 'post_id',
         joinTo: 'author_id'
+    },
+    labels: {
+        tableName: 'labels',
+        type: 'manyToMany',
+        joinTable: 'members_labels',
+        joinFrom: 'member_id',
+        joinTo: 'label_id'
+    },
+    posts_meta: {
+        tableName: 'posts_meta',
+        type: 'oneToOne',
+        joinFrom: 'post_id'
     }
 };
 
-const EXPANSIONS = [{
-    key: 'primary_tag',
-    replacement: 'tags.slug',
-    expansion: 'posts_tags.sort_order:0+tags.visibility:public'
-}, {
-    key: 'primary_author',
-    replacement: 'authors.slug',
-    expansion: 'posts_authors.sort_order:0+authors.visibility:public'
-}, {
-    key: 'authors',
-    replacement: 'authors.slug'
-}, {
-    key: 'author',
-    replacement: 'authors.slug'
-}, {
-    key: 'tag',
-    replacement: 'tags.slug'
-}, {
-    key: 'tags',
-    replacement: 'tags.slug'
-}];
+const EXPANSIONS = {
+    posts: [{
+        key: 'primary_tag',
+        replacement: 'tags.slug',
+        expansion: 'posts_tags.sort_order:0+tags.visibility:public'
+    }, {
+        key: 'primary_author',
+        replacement: 'authors.slug',
+        expansion: 'posts_authors.sort_order:0+authors.visibility:public'
+    }, {
+        key: 'authors',
+        replacement: 'authors.slug'
+    }, {
+        key: 'author',
+        replacement: 'authors.slug'
+    }, {
+        key: 'tag',
+        replacement: 'tags.slug'
+    }, {
+        key: 'tags',
+        replacement: 'tags.slug'
+    }],
+    members: [{
+        key: 'label',
+        replacement: 'labels.slug'
+    }, {
+        key: 'labels',
+        replacement: 'labels.slug'
+    }]
+};
 
 const filter = function filter(Bookshelf) {
     const Model = Bookshelf.Model.extend({
@@ -49,7 +71,7 @@ const filter = function filter(Bookshelf) {
         enforcedFilters() {},
         defaultFilters() {},
         extraFilters() {},
-
+        filterExpansions() {},
         /**
          * Method which makes the necessary query builder calls (through knex) for the filters set on this model
          * instance.
@@ -57,10 +79,21 @@ const filter = function filter(Bookshelf) {
         applyDefaultAndCustomFilters: function applyDefaultAndCustomFilters(options) {
             const nql = require('@nexes/nql');
 
+            const expansions = [];
+
+            if (EXPANSIONS[this.tableName]) {
+                expansions.push(...EXPANSIONS[this.tableName]);
+            }
+
+            if (this.filterExpansions()) {
+                expansions.push(...this.filterExpansions());
+            }
+
             let custom = options.filter;
             let extra = this.extraFilters(options);
             let overrides = this.enforcedFilters(options);
             let defaults = this.defaultFilters(options);
+            let transformer = options.mongoTransformer;
 
             debug('custom', custom);
             debug('extra', extra);
@@ -79,14 +112,15 @@ const filter = function filter(Bookshelf) {
                 this.query((qb) => {
                     nql(custom, {
                         relations: RELATIONS,
-                        expansions: EXPANSIONS,
+                        expansions: expansions,
                         overrides: overrides,
-                        defaults: defaults
+                        defaults: defaults,
+                        transformer: transformer
                     }).querySQL(qb);
                 });
             } catch (err) {
-                throw new common.errors.BadRequestError({
-                    message: common.i18n.t('errors.models.plugins.filter.errorParsing'),
+                throw new errors.BadRequestError({
+                    message: i18n.t('errors.models.plugins.filter.errorParsing'),
                     err: err
                 });
             }

@@ -18,10 +18,7 @@ const tag = (attrs, frame) => {
         }
     }
 
-    // Already deleted in model.toJSON, but leaving here so that we can clean that up when we deprecate v0.1
     delete attrs.parent_id;
-
-    // @NOTE: unused fields
     delete attrs.parent;
 
     return attrs;
@@ -29,11 +26,11 @@ const tag = (attrs, frame) => {
 
 const author = (attrs, frame) => {
     if (localUtils.isContentAPI(frame)) {
-        // Already deleted in model.toJSON, but leaving here so that we can clean that up when we deprecate v0.1
         delete attrs.created_at;
         delete attrs.updated_at;
         delete attrs.last_seen;
         delete attrs.status;
+        delete attrs.email;
 
         // @NOTE: used for night shift
         delete attrs.accessibility;
@@ -68,12 +65,13 @@ const author = (attrs, frame) => {
     // @NOTE: unused fields
     delete attrs.visibility;
     delete attrs.locale;
-    delete attrs.ghost_auth_id;
 
     return attrs;
 };
 
 const post = (attrs, frame) => {
+    const columns = frame && frame.options && frame.options.columns || null;
+    const fields = frame && frame.original && frame.original.query && frame.original.query.fields || null;
     if (localUtils.isContentAPI(frame)) {
         // @TODO: https://github.com/TryGhost/Ghost/issues/10335
         // delete attrs.page;
@@ -98,20 +96,33 @@ const post = (attrs, frame) => {
         if (attrs.og_description === '') {
             attrs.og_description = null;
         }
+        // NOTE: the visibility column has to be always present in Content API response to perform content gating
+        if (columns && columns.includes('visibility') && fields && !fields.includes('visibility')) {
+            delete attrs.visibility;
+        }
     } else {
         delete attrs.page;
+    }
 
-        if (!attrs.tags) {
-            delete attrs.primary_tag;
-        }
+    if (columns && columns.includes('email_recipient_filter') && fields && !fields.includes('email_recipient_filter')) {
+        delete attrs.email_recipient_filter;
+    }
 
-        if (!attrs.authors) {
-            delete attrs.primary_author;
-        }
+    if (fields && !fields.includes('send_email_when_published')) {
+        delete attrs.send_email_when_published;
+    }
+
+    if (!attrs.tags) {
+        delete attrs.primary_tag;
+    }
+
+    if (!attrs.authors) {
+        delete attrs.primary_author;
     }
 
     delete attrs.locale;
     delete attrs.author;
+    delete attrs.type;
 
     return attrs;
 };

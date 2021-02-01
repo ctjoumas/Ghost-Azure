@@ -1,8 +1,25 @@
 const _ = require('lodash');
 const debug = require('ghost-ignition').debug('api:canary:utils:serializers:input:posts');
+const mapNQLKeyValues = require('@nexes/nql').utils.mapKeyValues;
 const url = require('./utils/url');
+const slugFilterOrder = require('./utils/slug-filter-order');
 const localUtils = require('../../index');
-const converters = require('../../../../../lib/mobiledoc/converters');
+const mobiledoc = require('../../../../../lib/mobiledoc');
+const postsMetaSchema = require('../../../../../data/schema').tables.posts_meta;
+
+const replacePageWithType = mapNQLKeyValues({
+    key: {
+        from: 'page',
+        to: 'type'
+    },
+    values: [{
+        from: false,
+        to: 'post'
+    }, {
+        from: true,
+        to: 'page'
+    }]
+});
 
 function removeMobiledocFormat(frame) {
     if (frame.options.formats && frame.options.formats.includes('mobiledoc')) {
@@ -21,7 +38,7 @@ function defaultRelations(frame) {
         return false;
     }
 
-    frame.options.withRelated = ['tags', 'authors', 'authors.roles'];
+    frame.options.withRelated = ['tags', 'authors', 'authors.roles', 'email'];
 }
 
 function setDefaultOrder(frame) {
@@ -32,8 +49,18 @@ function setDefaultOrder(frame) {
         includesOrderedRelations = _.intersection(orderedRelations, frame.options.withRelated).length > 0;
     }
 
-    if (!frame.options.order && !includesOrderedRelations) {
+    if (!frame.options.order && !includesOrderedRelations && frame.options.filter) {
+        frame.options.autoOrder = slugFilterOrder('posts', frame.options.filter);
+    }
+
+    if (!frame.options.order && !frame.options.autoOrder && !includesOrderedRelations) {
         frame.options.order = 'published_at desc';
+    }
+}
+
+function forceVisibilityColumn(frame) {
+    if (frame.options.columns && !frame.options.columns.includes('visibility')) {
+        frame.options.columns.push('visibility');
     }
 }
 
@@ -43,6 +70,12 @@ function defaultFormat(frame) {
     }
 
     frame.options.formats = 'mobiledoc';
+}
+
+function handlePostsMeta(frame) {
+    let metaAttrs = _.keys(_.omit(postsMetaSchema, ['id', 'post_id']));
+    let meta = _.pick(frame.data.posts[0], metaAttrs);
+    frame.data.posts[0].posts_meta = meta;
 }
 
 /**
@@ -55,9 +88,9 @@ function defaultFormat(frame) {
  */
 const forcePageFilter = (frame) => {
     if (frame.options.filter) {
-        frame.options.filter = `(${frame.options.filter})+page:false`;
+        frame.options.filter = `(${frame.options.filter})+type:post`;
     } else {
-        frame.options.filter = 'page:false';
+        frame.options.filter = 'type:post';
     }
 };
 
@@ -75,6 +108,10 @@ module.exports = {
 
         forcePageFilter(frame);
 
+        if (frame.options.columns && frame.options.columns.includes('send_email_when_published')) {
+            frame.options.columns.push('email_recipient_filter');
+        }
+
         /**
          * ## current cases:
          * - context object is empty (functional call, content api access)
@@ -86,6 +123,7 @@ module.exports = {
             removeMobiledocFormat(frame);
 
             setDefaultOrder(frame);
+            forceVisibilityColumn(frame);
         }
 
         if (!localUtils.isContentAPI(frame)) {
@@ -94,7 +132,7 @@ module.exports = {
             defaultRelations(frame);
         }
 
-        debug(frame.options);
+        frame.options.mongoTransformer = replacePageWithType;
     },
 
     read(apiConfig, frame) {
@@ -102,6 +140,10 @@ module.exports = {
 
         forcePageFilter(frame);
 
+        if (frame.options.columns && frame.options.columns.includes('send_email_when_published')) {
+            frame.options.columns.push('email_recipient_filter');
+        }
+
         /**
          * ## current cases:
          * - context object is empty (functional call, content api access)
@@ -113,6 +155,7 @@ module.exports = {
             removeMobiledocFormat(frame);
 
             setDefaultOrder(frame);
+            forceVisibilityColumn(frame);
         }
 
         if (!localUtils.isContentAPI(frame)) {
@@ -120,8 +163,6 @@ module.exports = {
             defaultFormat(frame);
             defaultRelations(frame);
         }
-
-        debug(frame.options);
     },
 
     add(apiConfig, frame, options = {add: true}) {
@@ -131,7 +172,7 @@ module.exports = {
             const html = frame.data.posts[0].html;
 
             if (frame.options.source === 'html' && !_.isEmpty(html)) {
-                frame.data.posts[0].mobiledoc = JSON.stringify(converters.htmlToMobiledocConverter(html));
+                frame.data.posts[0].mobiledoc = JSON.stringify(mobiledoc.htmlToMobiledocConverter(html));
             }
         }
 
@@ -139,7 +180,7 @@ module.exports = {
 
         // @NOTE: force adding post
         if (options.add) {
-            frame.data.posts[0].page = false;
+            frame.data.posts[0].type = 'post';
         }
 
         // CASE: Transform short to long format
@@ -163,21 +204,25 @@ module.exports = {
             });
         }
 
+        handlePostsMeta(frame);
         defaultFormat(frame);
         defaultRelations(frame);
     },
 
     edit(apiConfig, frame) {
+        debug('edit');
         this.add(apiConfig, frame, {add: false});
 
+        handlePostsMeta(frame);
         forceStatusFilter(frame);
         forcePageFilter(frame);
     },
 
     destroy(apiConfig, frame) {
+        debug('destroy');
         frame.options.destroyBy = {
             id: frame.options.id,
-            page: false
+            type: 'post'
         };
 
         defaultFormat(frame);

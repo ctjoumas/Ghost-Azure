@@ -1,15 +1,15 @@
-var _ = require('lodash'),
-    Promise = require('bluebird'),
-    common = require('../../lib/common'),
-    parseContext = require('./parse-context'),
-    _private = {};
+const _ = require('lodash');
+const Promise = require('bluebird');
+const errors = require('@tryghost/errors');
+const {i18n} = require('../../lib/common');
+const parseContext = require('./parse-context');
+const _private = {};
 
 /**
  * @TODO:
  *
  * - remove if we drop `extraFilters` (see e.g. post model)
  * - we currently accept `?status={value}` in the API
- * - we currently accept `?staticPages={value}` in the API
  * - but instead people should use the `?filter=status:{value}`
  *
  * This function protects against:
@@ -17,7 +17,7 @@ var _ = require('lodash'),
  * - public context cannot fetch draft/scheduled posts
  */
 _private.applyStatusRules = function applyStatusRules(docName, method, opts) {
-    var err = new common.errors.NoPermissionError({message: common.i18n.t('errors.permissions.applyStatusRules.error', {docName: docName})});
+    const err = new errors.NoPermissionError({message: i18n.t('errors.permissions.applyStatusRules.error', {docName: docName})});
 
     // Enforce status 'active' for users
     if (docName === 'users') {

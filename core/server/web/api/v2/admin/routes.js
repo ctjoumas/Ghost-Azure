@@ -1,25 +1,22 @@
-const express = require('express');
-const api = require('../../../../api');
+const express = require('../../../../../shared/express');
 const apiv2 = require('../../../../api/v2');
 const mw = require('./middleware');
+const apiMw = require('../../middleware');
 
 const shared = require('../../../shared');
 
-// Handling uploads & imports
-const upload = shared.middlewares.upload;
-
 module.exports = function apiRoutes() {
-    const router = express.Router();
+    const router = express.Router('v2 admin');
 
     // alias delete with del
     router.del = router.delete;
 
-    router.use(shared.middlewares.api.cors);
+    router.use(apiMw.cors);
 
     const http = apiv2.http;
 
     // ## Public
-    router.get('/site', http(apiv2.site.read));
+    router.get('/site', mw.publicAdminApi, http(apiv2.site.read));
 
     // ## Configuration
     router.get('/config', mw.authAdminApi, http(apiv2.config.read));
@@ -49,14 +46,14 @@ module.exports = function apiRoutes() {
     router.del('/integrations/:id', mw.authAdminApi, http(apiv2.integrations.destroy));
 
     // ## Schedules
-    router.put('/schedules/:resource/:id', mw.authAdminApi, http(apiv2.schedules.publish));
+    router.put('/schedules/:resource/:id', mw.authAdminApiWithUrl, http(apiv2.schedules.publish));
 
     // ## Settings
     router.get('/settings/routes/yaml', mw.authAdminApi, http(apiv2.settings.download));
     router.post('/settings/routes/yaml',
         mw.authAdminApi,
-        upload.single('routes'),
-        shared.middlewares.validation.upload({type: 'routes'}),
+        apiMw.upload.single('routes'),
+        apiMw.upload.validation({type: 'routes'}),
         http(apiv2.settings.upload)
     );
 
@@ -84,28 +81,8 @@ module.exports = function apiRoutes() {
     router.put('/tags/:id', mw.authAdminApi, http(apiv2.tags.edit));
     router.del('/tags/:id', mw.authAdminApi, http(apiv2.tags.destroy));
 
-    // ## Subscribers
-    router.get('/subscribers', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.browse));
-    router.get('/subscribers/csv', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.exportCSV));
-    router.post('/subscribers/csv',
-        shared.middlewares.labs.subscribers,
-        mw.authAdminApi,
-        upload.single('subscribersfile'),
-        shared.middlewares.validation.upload({type: 'subscribers'}),
-        http(apiv2.subscribers.importCSV)
-    );
-    router.get('/subscribers/:id', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.read));
-    router.get('/subscribers/email/:email', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.read));
-    router.post('/subscribers', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.add));
-    router.put('/subscribers/:id', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.edit));
-    router.del('/subscribers/:id', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.destroy));
-    router.del('/subscribers/email/:email', shared.middlewares.labs.subscribers, mw.authAdminApi, http(apiv2.subscribers.destroy));
-
     // ## Roles
     router.get('/roles/', mw.authAdminApi, http(apiv2.roles.browse));
-
-    // ## Clients
-    router.get('/clients/slug/:slug', api.http(api.clients.read));
 
     // ## Slugs
     router.get('/slugs/:type/:name', mw.authAdminApi, http(apiv2.slugs.generate));
@@ -120,8 +97,8 @@ module.exports = function apiRoutes() {
 
     router.post('/themes/upload',
         mw.authAdminApi,
-        upload.single('file'),
-        shared.middlewares.validation.upload({type: 'themes'}),
+        apiMw.upload.single('file'),
+        apiMw.upload.validation({type: 'themes'}),
         http(apiv2.themes.upload)
     );
 
@@ -144,8 +121,8 @@ module.exports = function apiRoutes() {
     router.get('/db', mw.authAdminApi, http(apiv2.db.exportContent));
     router.post('/db',
         mw.authAdminApi,
-        upload.single('importfile'),
-        shared.middlewares.validation.upload({type: 'db'}),
+        apiMw.upload.single('importfile'),
+        apiMw.upload.validation({type: 'db'}),
         http(apiv2.db.importContent)
     );
     router.del('/db', mw.authAdminApi, http(apiv2.db.deleteAllContent));
@@ -162,14 +139,14 @@ module.exports = function apiRoutes() {
     router.post('/slack/test', mw.authAdminApi, http(apiv2.slack.sendTest));
 
     // ## Sessions
-    router.get('/session', mw.authAdminApi, api.http(apiv2.session.read));
+    router.get('/session', mw.authAdminApi, http(apiv2.session.read));
     // We don't need auth when creating a new session (logging in)
     router.post('/session',
         shared.middlewares.brute.globalBlock,
         shared.middlewares.brute.userLogin,
-        api.http(apiv2.session.add)
+        http(apiv2.session.add)
     );
-    router.del('/session', mw.authAdminApi, api.http(apiv2.session.delete));
+    router.del('/session', mw.authAdminApi, http(apiv2.session.delete));
 
     // ## Authentication
     router.post('/authentication/passwordreset',
@@ -187,9 +164,9 @@ module.exports = function apiRoutes() {
     // ## Images
     router.post('/images/upload',
         mw.authAdminApi,
-        upload.single('file'),
-        shared.middlewares.validation.upload({type: 'images'}),
-        shared.middlewares.image.normalize,
+        apiMw.upload.single('file'),
+        apiMw.upload.validation({type: 'images'}),
+        apiMw.normalizeImage,
         http(apiv2.images.upload)
     );
 
@@ -203,8 +180,8 @@ module.exports = function apiRoutes() {
     router.get('/redirects/json', mw.authAdminApi, http(apiv2.redirects.download));
     router.post('/redirects/json',
         mw.authAdminApi,
-        upload.single('redirects'),
-        shared.middlewares.validation.upload({type: 'redirects'}),
+        apiMw.upload.single('redirects'),
+        apiMw.upload.validation({type: 'redirects'}),
         http(apiv2.redirects.upload)
     );
 

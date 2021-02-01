@@ -1,44 +1,22 @@
 // # Get Helper
 // Usage: `{{#get "posts" limit="5"}}`, `{{#get "tags" limit="all"}}`
 // Fetches data from the API
-var proxy = require('./proxy'),
-    _ = require('lodash'),
-    Promise = require('bluebird'),
-    jsonpath = require('jsonpath'),
+const {config, logging, errors, i18n, hbs, api} = require('../services/proxy');
+const _ = require('lodash');
+const Promise = require('bluebird');
+const jsonpath = require('jsonpath');
 
-    config = proxy.config,
-    logging = proxy.logging,
-    errors = proxy.errors,
-    i18n = proxy.i18n,
-    createFrame = proxy.hbs.handlebars.createFrame,
+const createFrame = hbs.handlebars.createFrame;
 
-    api = proxy.api,
-    labs = proxy.labs,
-    pathAliases,
-    get;
-
-/**
- * v0.1: users, posts, tags
- * v2: authors, pagesPublic, posts, tagsPublic
- *
- * @NOTE: if you use "users" in v2, we should fallback to authors
- */
 const RESOURCES = {
     posts: {
-        alias: 'postsPublic',
-        resource: 'posts'
+        alias: 'postsPublic'
     },
     tags: {
-        alias: 'tagsPublic',
-        resource: 'tags'
-    },
-    users: {
-        alias: 'authorsPublic',
-        resource: 'users'
+        alias: 'tagsPublic'
     },
     pages: {
-        alias: 'pagesPublic',
-        resource: 'posts'
+        alias: 'pagesPublic'
     },
     authors: {
         alias: 'authorsPublic'
@@ -46,7 +24,7 @@ const RESOURCES = {
 };
 
 // Short forms of paths which we should understand
-pathAliases = {
+const pathAliases = {
     'post.tags': 'post.tags[*].slug',
     'post.author': 'post.author.slug'
 };
@@ -59,7 +37,7 @@ pathAliases = {
  * @returns {boolean}
  */
 function isBrowse(options) {
-    var browse = true;
+    let browse = true;
 
     if (options.id || options.slug) {
         browse = false;
@@ -77,10 +55,10 @@ function isBrowse(options) {
  * @returns {String}
  */
 function resolvePaths(globals, data, value) {
-    var regex = /\{\{(.*?)\}\}/g;
+    const regex = /\{\{(.*?)\}\}/g;
 
     value = value.replace(regex, function (match, path) {
-        var result;
+        let result;
 
         // Handle aliases
         path = pathAliases[path] ? pathAliases[path] : path;
@@ -129,7 +107,7 @@ function parseOptions(globals, data, options) {
  * @param {Object} options
  * @returns {Promise}
  */
-get = function get(resource, options) {
+module.exports = function get(resource, options) {
     options = options || {};
     options.hash = options.hash || {};
     options.data = options.data || {};
@@ -154,22 +132,16 @@ get = function get(resource, options) {
         return Promise.resolve(options.inverse(self, {data: data}));
     }
 
-    const controller = api[apiVersion][RESOURCES[resource].alias] ? RESOURCES[resource].alias : RESOURCES[resource].resource;
+    const controllerName = RESOURCES[resource].alias;
+    const controller = api[apiVersion][controllerName];
     const action = isBrowse(apiOptions) ? 'browse' : 'read';
-
-    // CASE: no fallback defined e.g. v0.1 tries to fetch "authors"
-    if (!controller) {
-        data.error = i18n.t('warnings.helpers.get.invalidResource');
-        logging.warn(data.error);
-        return Promise.resolve(options.inverse(self, {data: data}));
-    }
 
     // Parse the options we're going to pass to the API
     apiOptions = parseOptions(ghostGlobals, this, apiOptions);
 
     // @TODO: https://github.com/TryGhost/Ghost/issues/10548
-    return api[apiVersion][controller][action](apiOptions).then(function success(result) {
-        var blockParams;
+    return controller[action](apiOptions).then(function success(result) {
+        let blockParams;
 
         // used for logging details of slow requests
         returnedRowsCount = result[resource] && result[resource].length;
@@ -200,36 +172,11 @@ get = function get(resource, options) {
                 message: `{{#get}} helper took ${totalMs}ms to complete`,
                 code: 'SLOW_GET_HELPER',
                 errorDetails: {
-                    api: `${apiVersion}.${controller}.${action}`,
+                    api: `${apiVersion}.${controllerName}.${action}`,
                     apiOptions,
                     returnedRows: returnedRowsCount
                 }
             }));
         }
     });
-};
-
-module.exports = function getLabsWrapper() {
-    const self = this;
-    const args = arguments;
-    const apiVersion = _.get(args, '[1].data.root._locals.apiVersion');
-
-    // If the API version is v0.1 return the labs enabled version of the helper
-    if (apiVersion === 'v0.1') {
-        return labs.enabledHelper({
-            flagKey: 'publicAPI',
-            flagName: 'Public API',
-            helperName: 'get',
-            // Even though this is a labs enabled helper, really we want users to upgrade to v2 API.
-            errMessagePath: 'warnings.helpers.get.apiRequired.message',
-            errContextPath: 'warnings.helpers.get.apiRequired.context',
-            helpUrl: 'https://ghost.org/docs/api/handlebars-themes/packagejson/',
-            async: true
-        }, function executeHelper() {
-            return get.apply(self, args);
-        });
-    }
-
-    // Else, we just apply the helper normally
-    return get.apply(self, args);
 };

@@ -1,8 +1,9 @@
-const debug = require('ghost-ignition').debug('services:routing:controllers:entry'),
-    url = require('url'),
-    urlService = require('../../../services/url'),
-    urlUtils = require('../../../../server/lib/url-utils'),
-    helpers = require('../helpers');
+const debug = require('ghost-ignition').debug('services:routing:controllers:entry');
+const url = require('url');
+const config = require('../../../../shared/config');
+const urlService = require('../../../services/url');
+const urlUtils = require('../../../../shared/url-utils');
+const helpers = require('../helpers');
 
 /**
  * @description Entry controller.
@@ -32,10 +33,15 @@ module.exports = function entryController(req, res, next) {
 
             // CASE: last param is of url is /edit, redirect to admin
             if (lookup.isEditURL) {
+                if (!config.get('admin:redirects')) {
+                    debug('is edit url but admin redirects are disabled');
+                    return next();
+                }
+
                 debug('redirect. is edit url');
                 const resourceType = entry.page ? 'page' : 'post';
 
-                return urlUtils.redirectToAdmin(302, res, `/editor/${resourceType}/${entry.id}`);
+                return urlUtils.redirectToAdmin(302, res, `/#/editor/${resourceType}/${entry.id}`);
             }
 
             /**
@@ -67,13 +73,6 @@ module.exports = function entryController(req, res, next) {
              * @NOTE:
              *
              * Ensure we redirect to the correct post url including subdirectory.
-             *
-             * @NOTE:
-             * Keep in mind, that the logic here is used for v0.1 and v2.
-             * v0.1 returns relative urls, v2 returns absolute urls.
-             *
-             * @TODO:
-             * Simplify if we drop v0.1.
              */
             if (urlUtils.absoluteToRelative(entry.url, {withoutSubdirectory: true}) !== req.path) {
                 debug('redirect');

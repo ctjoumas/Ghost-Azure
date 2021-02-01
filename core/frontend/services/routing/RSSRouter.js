@@ -1,8 +1,7 @@
 const ParentRouter = require('./ParentRouter');
-const urlUtils = require('../../../server/lib/url-utils');
+const urlUtils = require('../../../shared/url-utils');
 
 const controllers = require('./controllers');
-const middlewares = require('./middlewares');
 
 /**
  * @description RSS Router, which should be used as a sub-router in other routes.
@@ -24,18 +23,12 @@ class RSSRouter extends ParentRouter {
     _registerRoutes() {
         this.mountRoute(this.route.value, controllers.rss);
 
-        // REGISTER: pagination
-        this.router().param('page', middlewares.pageParam);
-
-        // REGISTER: actual rss route
-        this.mountRoute(urlUtils.urlJoin(this.route.value, ':page(\\d+)'), controllers.rss);
-
         // REGISTER: redirect rule
         this.mountRoute('/feed/', this._redirectFeedRequest.bind(this));
     }
 
     /**
-     * @description Simple controller function to redirect /rss to /feed
+     * @description Simple controller function to redirect /feed to /rss
      * @param {Object} req
      * @param {Object}res
      * @private

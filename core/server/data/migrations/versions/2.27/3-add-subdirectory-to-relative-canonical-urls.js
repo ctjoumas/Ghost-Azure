@@ -1,6 +1,6 @@
-const models = require('../../../../models');
-const common = require('../../../../lib/common');
-const config = require('../../../../config');
+const Promise = require('bluebird');
+const logging = require('../../../../../shared/logging');
+const config = require('../../../../../shared/config');
 const {URL} = require('url');
 
 module.exports.config = {
@@ -26,31 +26,32 @@ module.exports.up = (options) => {
     }, options);
 
     if (url.pathname === '/') {
-        common.logging.info('Skipping posts.canonical_url subdirectory fix: no subdirectory configured');
+        logging.info('Skipping posts.canonical_url subdirectory fix: no subdirectory configured');
         return Promise.resolve();
     }
 
     // perform a specific query for the type of canonical URLs we're looking for
     // so we're not fetching and manually looping over a ton of post models
-    return models.Posts
-        .forge()
-        .query((qb) => {
-            qb.where('canonical_url', 'like', '/%');
-            qb.whereNot('canonical_url', 'like', '//%');
-        })
-        .fetch(localOptions)
-        .then((posts) => {
+    return localOptions
+        .transacting('posts')
+        .where('canonical_url', 'like', '/%')
+        .whereNot('canonical_url', 'like', '//%')
+        .select().then((posts) => {
             if (posts) {
                 return Promise.mapSeries(posts, (post) => {
-                    const canonicalUrl = post.get('canonical_url').replace('/', url.pathname);
-                    post.set('canonical_url', canonicalUrl);
-                    return post.save(null, localOptions);
+                    const canonicalUrl = post.canonical_url.replace('/', url.pathname);
+                    return localOptions
+                        .transacting('posts')
+                        .where('id', '=', post.id)
+                        .update({
+                            canonical_url: canonicalUrl
+                        });
                 }).then(() => {
-                    common.logging.info(`Added subdirectory prefix to canonical_url in ${posts.length} posts`);
+                    logging.info(`Added subdirectory prefix to canonical_url in ${posts.length} posts`);
                 });
             }
 
-            common.logging.info('Skipping posts.canonical_url subdirectory fix: no canonical_urls to fix');
+            logging.info('Skipping posts.canonical_url subdirectory fix: no canonical_urls to fix');
             return Promise.resolve();
         });
 };
@@ -71,28 +72,29 @@ module.exports.down = (options) => {
     }, options);
 
     if (url.pathname === '/') {
-        common.logging.info('Skipping posts.canonical_url subdirectory fix: no subdirectory configured');
+        logging.info('Skipping posts.canonical_url subdirectory fix: no subdirectory configured');
         return Promise.resolve();
     }
 
-    return models.Posts
-        .forge()
-        .query((qb) => {
-            qb.where('canonical_url', 'LIKE', `${url.pathname}%`);
-        })
-        .fetch()
-        .then((posts) => {
+    return localOptions
+        .transacting('posts')
+        .where('canonical_url', 'like', `${url.pathname}%`)
+        .select().then((posts) => {
             if (posts) {
                 return Promise.mapSeries(posts, (post) => {
-                    const canonicalUrl = post.get('canonical_url').replace(url.pathname, '/');
-                    post.set('canonical_url', canonicalUrl);
-                    return post.save(null, localOptions);
+                    const canonicalUrl = post.canonical_url.replace(url.pathname, '/');
+                    return localOptions
+                        .transacting('posts')
+                        .where('id', '=', post.id)
+                        .update({
+                            canonical_url: canonicalUrl
+                        });
                 }).then(() => {
-                    common.logging.info(`Removed subdirectory prefix from canonical_url in ${posts.length} posts`);
+                    logging.info(`Removed subdirectory prefix from canonical_url in ${posts.length} posts`);
                 });
             }
 
-            common.logging.info('Skipping posts.canonical_url subdirectory fix: no canonical_urls to fix');
+            logging.info('Skipping posts.canonical_url subdirectory fix: no canonical_urls to fix');
             return Promise.resolve();
         });
 };

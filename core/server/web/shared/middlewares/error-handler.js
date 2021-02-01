@@ -1,9 +1,11 @@
 const hbs = require('express-hbs');
 const _ = require('lodash');
 const debug = require('ghost-ignition').debug('error-handler');
-const config = require('../../../config');
-const common = require('../../../lib/common');
+const errors = require('@tryghost/errors');
+const config = require('../../../../shared/config');
+const {i18n} = require('../../../lib/common');
 const helpers = require('../../../../frontend/services/routing/helpers');
+const sentry = require('../../../../shared/sentry');
 
 const escapeExpression = hbs.Utils.escapeExpression;
 const _private = {};
@@ -32,23 +34,23 @@ _private.prepareError = (err, req, res, next) => {
         err = err[0];
     }
 
-    if (!common.errors.utils.isIgnitionError(err)) {
+    if (!errors.utils.isIgnitionError(err)) {
         // We need a special case for 404 errors
         // @TODO look at adding this to the GhostError class
         if (err.statusCode && err.statusCode === 404) {
-            err = new common.errors.NotFoundError({
+            err = new errors.NotFoundError({
                 err: err
             });
-        } else if (err instanceof TypeError && err.stack.match(/node_modules\/handlebars\//)) {
+        } else if (err.stack.match(/node_modules\/handlebars\//)) {
             // Temporary handling of theme errors from handlebars
             // @TODO remove this when #10496 is solved properly
-            err = new common.errors.IncorrectUsageError({
+            err = new errors.IncorrectUsageError({
                 err: err,
-                message: '{{#if}} or {{#unless}} helper is malformed',
+                message: err.message,
                 statusCode: err.statusCode
             });
         } else {
-            err = new common.errors.GhostError({
+            err = new errors.GhostError({
                 err: err,
                 message: err.message,
                 statusCode: err.statusCode
@@ -101,8 +103,8 @@ _private.prepareUserMessage = (err, res) => {
             destroy: 'delete'
         };
 
-        if (common.i18n.doesTranslationKeyExist(`common.api.actions.${docName}.${method}`)) {
-            action = common.i18n.t(`common.api.actions.${docName}.${method}`);
+        if (i18n.doesTranslationKeyExist(`common.api.actions.${docName}.${method}`)) {
+            action = i18n.t(`common.api.actions.${docName}.${method}`);
         } else if (Object.keys(actionMap).includes(method)) {
             let resource = docName;
 
@@ -120,7 +122,7 @@ _private.prepareUserMessage = (err, res) => {
                 userError.context = err.message;
             }
 
-            userError.message = common.i18n.t(`errors.api.userMessages.${err.name}`, {action: action});
+            userError.message = i18n.t(`errors.api.userMessages.${err.name}`, {action: action});
         }
     }
 
@@ -144,10 +146,10 @@ _private.JSONErrorRendererV2 = (err, req, res, next) => { // eslint-disable-line
     });
 };
 
-_private.ErrorFallbackMessage = err => `<h1>${common.i18n.t('errors.errors.oopsErrorTemplateHasError')}</h1>
-     <p>${common.i18n.t('errors.errors.encounteredError')}</p>
+_private.ErrorFallbackMessage = err => `<h1>${i18n.t('errors.errors.oopsErrorTemplateHasError')}</h1>
+     <p>${i18n.t('errors.errors.encounteredError')}</p>
      <pre>${escapeExpression(err.message || err)}</pre>
-     <br ><p>${common.i18n.t('errors.errors.whilstTryingToRender')}</p>
+     <br ><p>${i18n.t('errors.errors.whilstTryingToRender')}</p>
      ${err.statusCode} <pre>${escapeExpression(err.message || err)}</pre>`;
 
 _private.ThemeErrorRenderer = (err, req, res, next) => {
@@ -163,7 +165,7 @@ _private.ThemeErrorRenderer = (err, req, res, next) => {
     // Format Data
     const data = {
         message: err.message,
-        // @deprecated Remove in Ghost 3.0
+        // @deprecated Remove in Ghost 4.0
         code: err.statusCode,
         statusCode: err.statusCode,
         errorDetails: err.errorDetails || []
@@ -185,17 +187,17 @@ _private.ThemeErrorRenderer = (err, req, res, next) => {
 
     // @TODO use renderer here?!
     // Render Call - featuring an error handler for what happens if rendering fails
-    res.render(res._template, data, (err, html) => {
-        if (!err) {
+    res.render(res._template, data, (_err, html) => {
+        if (!_err) {
             return res.send(html);
         }
 
         // re-attach new error e.g. error template has syntax error or misusage
-        req.err = err;
+        req.err = _err;
 
         // And then try to explain things to the user...
         // Cheat and output the error using handlebars escapeExpression
-        return res.status(500).send(_private.ErrorFallbackMessage(err));
+        return res.status(500).send(_private.ErrorFallbackMessage(_err));
     });
 };
 
@@ -216,17 +218,17 @@ _private.HTMLErrorRenderer = (err, req, res, next) => { // eslint-disable-line n
         req.app.set('views', config.get('paths').defaultViews);
     }
 
-    res.render('error', data, (err, html) => {
-        if (!err) {
+    res.render('error', data, (_err, html) => {
+        if (!_err) {
             return res.send(html);
         }
 
         // re-attach new error e.g. error template has syntax error or misusage
-        req.err = err;
+        req.err = _err;
 
         // And then try to explain things to the user...
         // Cheat and output the error using handlebars escapeExpression
-        return res.status(500).send(_private.ErrorFallbackMessage(err));
+        return res.status(500).send(_private.ErrorFallbackMessage(_err));
     });
 };
 
@@ -237,16 +239,18 @@ _private.BasicErrorRenderer = (err, req, res, next) => { // eslint-disable-line 
 errorHandler.resourceNotFound = (req, res, next) => {
     // TODO, handle unknown resources & methods differently, so that we can also produce
     // 405 Method Not Allowed
-    next(new common.errors.NotFoundError({message: common.i18n.t('errors.errors.resourceNotFound')}));
+    next(new errors.NotFoundError({message: i18n.t('errors.errors.resourceNotFound')}));
 };
 
 errorHandler.pageNotFound = (req, res, next) => {
-    next(new common.errors.NotFoundError({message: common.i18n.t('errors.errors.pageNotFound')}));
+    next(new errors.NotFoundError({message: i18n.t('errors.errors.pageNotFound')}));
 };
 
 errorHandler.handleJSONResponse = [
     // Make sure the error can be served
     _private.prepareError,
+    // Handle the error in Sentry
+    sentry.errorHandler,
     // Render the error using JSON format
     _private.JSONErrorRenderer
 ];
@@ -254,6 +258,8 @@ errorHandler.handleJSONResponse = [
 errorHandler.handleJSONResponseV2 = [
     // Make sure the error can be served
     _private.prepareError,
+    // Handle the error in Sentry
+    sentry.errorHandler,
     // Render the error using JSON format
     _private.JSONErrorRendererV2
 ];
@@ -261,6 +267,8 @@ errorHandler.handleJSONResponseV2 = [
 errorHandler.handleHTMLResponse = [
     // Make sure the error can be served
     _private.prepareError,
+    // Handle the error in Sentry
+    sentry.errorHandler,
     // Render the error using HTML format
     _private.HTMLErrorRenderer,
     // Fall back to basic if HTML is not explicitly accepted
@@ -270,6 +278,8 @@ errorHandler.handleHTMLResponse = [
 errorHandler.handleThemeResponse = [
     // Make sure the error can be served
     _private.prepareError,
+    // Handle the error in Sentry
+    sentry.errorHandler,
     // Render the error using theme template
     _private.ThemeErrorRenderer,
     // Fall back to basic if HTML is not explicitly accepted

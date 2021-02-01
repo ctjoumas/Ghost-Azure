@@ -1,3 +1,4 @@
+const url = require('url');
 const debug = require('ghost-ignition').debug('api:shared:http');
 const shared = require('../shared');
 const models = require('../../models');
@@ -13,8 +14,7 @@ const models = require('../../models');
  */
 const http = (apiImpl) => {
     return (req, res, next) => {
-        debug('request');
-
+        debug(`External API request to ${req.url}`);
         let apiKey = null;
         let integration = null;
         let user = null;
@@ -41,6 +41,12 @@ const http = (apiImpl) => {
             query: req.query,
             params: req.params,
             user: req.user,
+            session: req.session,
+            url: {
+                host: req.vhost ? req.vhost.host : req.get('host'),
+                pathname: url.parse(req.originalUrl || req.url).pathname,
+                secure: req.secure
+            },
             context: {
                 api_key: apiKey,
                 user: user,
@@ -56,12 +62,11 @@ const http = (apiImpl) => {
 
         apiImpl(frame)
             .then((result) => {
+                debug(`External API request to ${frame.docName}.${frame.method}`);
                 return shared.headers.get(result, apiImpl.headers, frame)
                     .then(headers => ({result, headers}));
             })
             .then(({result, headers}) => {
-                debug(result);
-
                 // CASE: api ctrl wants to handle the express response (e.g. streams)
                 if (typeof result === 'function') {
                     debug('ctrl function call');
@@ -80,13 +85,35 @@ const http = (apiImpl) => {
                 // CASE: generate headers based on the api ctrl configuration
                 res.set(headers);
 
-                if (apiImpl.response && apiImpl.response.format === 'plain') {
-                    debug('plain text response');
-                    return res.send(result);
+                const send = (format) => {
+                    if (format === 'plain') {
+                        debug('plain text response');
+                        return res.send(result);
+                    }
+
+                    debug('json response');
+                    res.json(result || {});
+                };
+
+                let responseFormat;
+
+                if (apiImpl.response){
+                    if (typeof apiImpl.response.format === 'function') {
+                        const apiResponseFormat = apiImpl.response.format();
+
+                        if (apiResponseFormat.then) { // is promise
+                            return apiResponseFormat.then((formatName) => {
+                                send(formatName);
+                            });
+                        } else {
+                            responseFormat = apiResponseFormat;
+                        }
+                    } else {
+                        responseFormat = apiImpl.response.format;
+                    }
                 }
 
-                debug('json response');
-                res.json(result || {});
+                send(responseFormat);
             })
             .catch((err) => {
                 req.frameOptions = {

@@ -1,11 +1,10 @@
-const _ = require('lodash'),
-    common = require('../../../../lib/common'),
-    models = require('../../../../models'),
-    message1 = 'Removing demo post.',
-    message2 = 'Removed demo post.',
-    message3 = 'Rollback: Bring back demo post.',
-    message4 = 'Skip: Demo post was already removed.',
-    message5 = 'Skip: Demo post exists.';
+const _ = require('lodash');
+const logging = require('../../../../../shared/logging');
+const message1 = 'Removing demo post.';
+const message2 = 'Removed demo post.';
+const message3 = 'Rollback: Bring back demo post.';
+const message4 = 'Skip: Demo post was already removed.';
+const message5 = 'Skip: Demo post exists.';
 
 const demoPost = {
     title: 'Koenig Demo Post',
@@ -34,29 +33,32 @@ module.exports.up = (options) => {
         migrating: true
     }, options);
 
-    return models.Post.findOne({slug: 'v2-demo-post', status: 'all'}, localOptions)
-        .then(function (postModel) {
-            if (!postModel) {
-                common.logging.warn(message4);
+    return localOptions
+        .transacting('posts')
+        .where('slug', 'v2-demo-post')
+        .where('status', 'all')
+        .select().then((posts) => {
+            if (!posts || posts.length === 0) {
+                logging.warn(message4);
                 return;
             }
-
-            common.logging.info(message1);
+            logging.info(message1);
+            let post = posts[0];
 
             // @NOTE: raw knex query, because of https://github.com/TryGhost/Ghost/issues/9983
             return options
                 .transacting('posts_authors')
-                .where('post_id', postModel.id)
+                .where('post_id', post.id)
                 .del()
                 .then(() => {
                     return options
                         .transacting('posts')
-                        .where('id', postModel.id)
+                        .where('id', post.id)
                         .del();
                 });
         })
         .then(() => {
-            common.logging.info(message2);
+            logging.info(message2);
         });
 };
 
@@ -67,14 +69,17 @@ module.exports.down = (options) => {
         migrating: true
     }, options);
 
-    return models.Post.findOne({slug: 'v2-demo-post', status: 'all'}, localOptions)
-        .then(function (postModel) {
-            if (postModel) {
-                common.logging.warn(message5);
+    return localOptions
+        .transacting('posts')
+        .where('slug', 'v2-demo-post')
+        .where('status', 'all')
+        .select().then((posts) => {
+            if (posts && posts.length > 0) {
+                logging.warn(message5);
                 return;
             }
 
-            common.logging.info(message3);
-            return models.Post.add(demoPost, localOptions);
+            logging.info(message3);
+            return localOptions.transacting('posts').insert(demoPost);
         });
 };
