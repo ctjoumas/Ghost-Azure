@@ -63,15 +63,31 @@ function dropColumn(tableName, column, transaction) {
     });
 }
 
-function addUnique(tableName, column, transaction) {
+/**
+ * Adds an unique index to a table over the given columns.
+ *
+ * @param {string} tableName - name of the table to add unique constraint to
+ * @param {string|[string]} columns - column(s) to form unique constraint with
+ * @param {Object} transaction - connnection object containing knex reference
+ * @param {Object} transaction.knex - knex instance
+ */
+function addUnique(tableName, columns, transaction) {
     return (transaction || db.knex).schema.table(tableName, function (table) {
-        table.unique(column);
+        table.unique(columns);
     });
 }
 
-function dropUnique(tableName, column, transaction) {
+/**
+ * Drops a unique key constraint from a table.
+ *
+ * @param {string} tableName - name of the table to drop unique constraint from
+ * @param {string|[string]} columns - column(s) unique constraint was formed
+ * @param {Object} transaction - connnection object containing knex reference
+ * @param {Object} transaction.knex - knex instance
+ */
+function dropUnique(tableName, columns, transaction) {
     return (transaction || db.knex).schema.table(tableName, function (table) {
-        table.dropUnique(column);
+        table.dropUnique(columns);
     });
 }
 
@@ -79,7 +95,7 @@ function dropUnique(tableName, column, transaction) {
  * https://github.com/tgriesser/knex/issues/1303
  * createTableIfNotExists can throw error if indexes are already in place
  */
-function createTable(table, transaction) {
+function createTable(table, transaction, tableSpec = schema[table]) {
     return (transaction || db.knex).schema.hasTable(table)
         .then(function (exists) {
             if (exists) {
@@ -89,14 +105,14 @@ function createTable(table, transaction) {
             return (transaction || db.knex).schema.createTable(table, function (t) {
                 let tableIndexes = [];
 
-                const columnKeys = _.keys(schema[table]);
+                const columnKeys = _.keys(tableSpec);
                 _.each(columnKeys, function (column) {
                     if (column === '@@INDEXES@@') {
-                        tableIndexes = schema[table]['@@INDEXES@@'];
+                        tableIndexes = tableSpec['@@INDEXES@@'];
                         return;
                     }
 
-                    return addTableColumn(table, t, column);
+                    return addTableColumn(table, t, column, tableSpec[column]);
                 });
 
                 _.each(tableIndexes, function (index) {

@@ -16,14 +16,13 @@ const {events, i18n} = require('./lib/common');
 const logging = require('../shared/logging');
 const migrator = require('./data/db/migrator');
 const urlUtils = require('./../shared/url-utils');
-let parentApp;
 
 // Frontend Components
 const themeService = require('../frontend/services/themes');
 const appService = require('../frontend/services/apps');
 const frontendSettings = require('../frontend/services/settings');
 
-function initialiseServices() {
+async function initialiseServices() {
     // CASE: When Ghost is ready with bootstrapping (db migrations etc.), we can trigger the router creation.
     //       Reason is that the routers access the routes.yaml, which shouldn't and doesn't have to be validated to
     //       start Ghost in maintenance mode.
@@ -43,7 +42,7 @@ function initialiseServices() {
     debug('`initialiseServices` Start...');
     const getRoutesHash = () => frontendSettings.getCurrentHash('routes');
 
-    return Promise.join(
+    await Promise.all([
         // Initialize the permissions actions and objects
         permissions.init(),
         xmlrpc.listen(),
@@ -57,16 +56,16 @@ function initialiseServices() {
             //       that rely on URL to lookup persisted scheduled records (jobs, etc.). Ref: https://github.com/TryGhost/Ghost/pull/10726#issuecomment-489557162
             apiUrl: urlUtils.urlFor('api', {version: 'v3', versionType: 'admin'}, true)
         })
-    ).then(function () {
-        debug('XMLRPC, Slack, MEGA, Webhooks, Scheduling, Permissions done');
+    ]);
 
-        // Initialise analytics events
-        if (config.get('segment:key')) {
-            require('./analytics-events').init();
-        }
-    }).then(function () {
-        debug('...`initialiseServices` End');
-    });
+    debug('XMLRPC, Slack, MEGA, Webhooks, Scheduling, Permissions done');
+
+    // Initialise analytics events
+    if (config.get('segment:key')) {
+        require('./analytics-events').init();
+    }
+
+    debug('...`initialiseServices` End');
 }
 
 async function initializeRecurringJobs() {
@@ -81,22 +80,33 @@ async function initializeRecurringJobs() {
     }
 }
 
+const initExpressApps = async () => {
+    await frontendSettings.init();
+    debug('Frontend settings done');
+
+    await themeService.init();
+    debug('Themes done');
+
+    const parentApp = require('./web/parent/app')();
+    debug('Express Apps done');
+
+    return parentApp;
+};
+
 /**
  * - initialise models
  * - initialise i18n
+ * - start the ghost server
  * - load all settings into settings cache (almost every component makes use of this cache)
+ * - enable maintenance mode if migrations are missing
  * - load active theme
  * - create our express apps (site, admin, api)
- * - start the ghost server
- * - enable maintenance mode if migrations are missing
  */
-const minimalRequiredSetupToStartGhost = (dbState) => {
+const minimalRequiredSetupToStartGhost = async (dbState) => {
     const settings = require('./services/settings');
     const jobService = require('./services/jobs');
     const models = require('./models');
     const GhostServer = require('./ghost-server');
-
-    let ghostServer;
 
     // Initialize Ghost core internationalization
     i18n.init();
@@ -105,109 +115,89 @@ const minimalRequiredSetupToStartGhost = (dbState) => {
     models.init();
     debug('Models done');
 
-    return settings.init()
-        .then(() => {
-            debug('Settings done');
+    const ghostServer = new GhostServer();
 
-            return frontendSettings.init();
-        })
-        .then(() => {
-            debug('Frontend settings done');
-            return themeService.init();
-        })
-        .then(() => {
-            debug('Themes done');
+    ghostServer.registerCleanupTask(async () => {
+        await jobService.shutdown();
+    });
 
-            parentApp = require('./web/parent/app')();
-            debug('Express Apps done');
+    // CASE: all good or db was just initialised
+    if (dbState === 1 || dbState === 2) {
+        await settings.init();
+        debug('Settings done');
+        const parentApp = await initExpressApps();
+        ghostServer.rootApp = parentApp;
 
-            return new GhostServer(parentApp);
-        })
-        .then((_ghostServer) => {
-            ghostServer = _ghostServer;
+        events.emit('db.ready');
 
-            ghostServer.registerCleanupTask(async () => {
-                await jobService.shutdown();
-            });
+        await initialiseServices();
+    }
 
-            // CASE: all good or db was just initialised
-            if (dbState === 1 || dbState === 2) {
-                events.emit('db.ready');
+    // CASE: migrations required, put blog into maintenance mode
+    if (dbState === 4) {
+        config.set('maintenance:enabled', true);
+        logging.info('Blog is in maintenance mode.');
 
-                return initialiseServices()
-                    .then(() => {
-                        initializeRecurringJobs();
-                    })
-                    .then(() => {
-                        return ghostServer;
-                    });
+        ghostServer.rootApp = require('./web/maintenance');
+
+        try {
+            migrator.migrate()
+                .then(async () => {
+                    await settings.init();
+                    debug('Settings done');
+
+                    const parentApp = await initExpressApps();
+                    ghostServer.swapHttpApp(parentApp);
+
+                    events.emit('db.ready');
+
+                    await initialiseServices();
+
+                    config.set('maintenance:enabled', false);
+                    logging.info('Blog is out of maintenance mode.');
+
+                    await GhostServer.announceServerReadiness();
+                });
+        } catch (err) {
+            try {
+                await GhostServer.announceServerReadiness(err);
+            } finally {
+                logging.error(err);
+                setTimeout(() => {
+                    process.exit(-1);
+                }, 100);
             }
+        }
+    }
 
-            // CASE: migrations required, put blog into maintenance mode
-            if (dbState === 4) {
-                logging.info('Blog is in maintenance mode.');
+    initializeRecurringJobs();
 
-                config.set('maintenance:enabled', true);
-
-                migrator.migrate()
-                    .then(() => {
-                        return settings.reinit().then(() => {
-                            events.emit('db.ready');
-                            return initialiseServices();
-                        });
-                    })
-                    .then(() => {
-                        config.set('maintenance:enabled', false);
-                        logging.info('Blog is out of maintenance mode.');
-                        return GhostServer.announceServerReadiness();
-                    })
-                    .then(() => {
-                        initializeRecurringJobs();
-                    })
-                    .catch((err) => {
-                        return GhostServer.announceServerReadiness(err)
-                            .finally(() => {
-                                logging.error(err);
-                                setTimeout(() => {
-                                    process.exit(-1);
-                                }, 100);
-                            });
-                    });
-
-                return ghostServer;
-            }
-        });
+    return ghostServer;
 };
 
 /**
  * Connect to database.
  * Check db state.
  */
-const isDatabaseInitialisationRequired = () => {
+const isDatabaseInitialisationRequired = async () => {
     const db = require('./data/db/connection');
-    let dbState;
 
-    return migrator.getState()
-        .then((state) => {
-            dbState = state;
+    let dbState = await migrator.getState();
 
-            // CASE: db initialisation required, wait till finished
-            if (dbState === 2) {
-                return migrator.dbInit();
-            }
+    // CASE: db initialisation required, wait till finished
+    if (dbState === 2) {
+        await migrator.dbInit();
+    }
 
-            // CASE: is db incompatible? e.g. you can't connect a 0.11 database with Ghost 1.0 or 2.0
-            if (dbState === 3) {
-                return migrator.isDbCompatible(db)
-                    .then(() => {
-                        dbState = 2;
-                        return migrator.dbInit();
-                    });
-            }
-        })
-        .then(() => {
-            return minimalRequiredSetupToStartGhost(dbState);
-        });
+    // CASE: is db incompatible? e.g. you can't connect a 0.11 database with Ghost 1.0 or 2.0
+    if (dbState === 3) {
+        await migrator.isDbCompatible(db);
+
+        dbState = 2;
+        await migrator.dbInit();
+    }
+
+    return minimalRequiredSetupToStartGhost(dbState);
 };
 
 module.exports = isDatabaseInitialisationRequired;

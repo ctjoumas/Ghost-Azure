@@ -373,6 +373,11 @@ module.exports = {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
         uuid: {type: 'string', maxlength: 36, nullable: true, unique: true, validations: {isUUID: true}},
         email: {type: 'string', maxlength: 191, nullable: false, unique: true, validations: {isEmail: true}},
+        status: {
+            type: 'string', maxlength: 50, nullable: false, defaultTo: 'free', validations: {
+                isIn: [['free', 'paid']]
+            }
+        },
         name: {type: 'string', maxlength: 191, nullable: true},
         note: {type: 'string', maxlength: 2000, nullable: true},
         geolocation: {type: 'string', maxlength: 2000, nullable: true},
@@ -427,7 +432,7 @@ module.exports = {
         updated_at: {type: 'dateTime', nullable: true},
         updated_by: {type: 'string', maxlength: 24, nullable: true},
         /* Below fields eventually should be normalised e.g. stripe_plans table, link to here on plan_id */
-        plan_nickname: {type: 'string', maxlength: 50, nullable: false},
+        plan_nickname: {type: 'string', maxlength: 50, nullable: true},
         plan_interval: {type: 'string', maxlength: 50, nullable: false},
         plan_amount: {type: 'integer', nullable: false},
         plan_currency: {type: 'string', maxLength: 3, nullable: false}
