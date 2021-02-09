@@ -34,7 +34,8 @@ module.exports = {
             'order',
             'debug',
             'page',
-            'search'
+            'search',
+            'paid'
         ],
         permissions: true,
         validation: {},
@@ -184,7 +185,7 @@ module.exports = {
         permissions: true,
         async query(frame) {
             try {
-                frame.options.withRelated = ['stripeSubscriptions'];
+                frame.options.withRelated = ['stripeSubscriptions', 'labels'];
                 const member = await membersService.api.members.update(frame.data.members[0], frame.options);
 
                 const hasCompedSubscription = !!member.related('stripeSubscriptions').find(sub => sub.get('plan_nickname') === 'Complimentary' && sub.get('status') === 'active');
@@ -303,7 +304,8 @@ module.exports = {
         options: [
             'limit',
             'filter',
-            'search'
+            'search',
+            'paid'
         ],
         headers: {
             disposition: {

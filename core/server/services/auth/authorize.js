@@ -1,3 +1,4 @@
+const labs = require('../labs');
 const errors = require('@tryghost/errors');
 const {i18n} = require('../../lib/common');
 
@@ -8,7 +9,7 @@ const authorize = {
         if (hasApiKey) {
             return next();
         }
-        if (hasMember) {
+        if (labs.isSet('members') && hasMember) {
             return next();
         }
         return next(new errors.NoPermissionError({
