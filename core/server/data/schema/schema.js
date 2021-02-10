@@ -12,7 +12,7 @@ module.exports = {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
         uuid: {type: 'string', maxlength: 36, nullable: false, validations: {isUUID: true}},
         title: {type: 'string', maxlength: 2000, nullable: false, validations: {isLength: {max: 255}}},
-        slug: {type: 'string', maxlength: 191, nullable: false, unique: true},
+        slug: {type: 'string', maxlength: 191, nullable: false},
         mobiledoc: {type: 'text', maxlength: 1000000000, fieldtype: 'long', nullable: true},
         html: {type: 'text', maxlength: 1000000000, fieldtype: 'long', nullable: true},
         comment_id: {type: 'string', maxlength: 50, nullable: true},
@@ -21,6 +21,7 @@ module.exports = {
         featured: {type: 'bool', nullable: false, defaultTo: false},
         type: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'post', validations: {isIn: [['post', 'page']]}},
         status: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'draft'},
+        // NOTE: unused at the moment and reserved for future features
         locale: {type: 'string', maxlength: 6, nullable: true},
         visibility: {
             type: 'string',
@@ -56,7 +57,10 @@ module.exports = {
         codeinjection_head: {type: 'text', maxlength: 65535, nullable: true},
         codeinjection_foot: {type: 'text', maxlength: 65535, nullable: true},
         custom_template: {type: 'string', maxlength: 100, nullable: true},
-        canonical_url: {type: 'text', maxlength: 2000, nullable: true}
+        canonical_url: {type: 'text', maxlength: 2000, nullable: true},
+        '@@UNIQUE_CONSTRAINTS@@': [
+            ['slug', 'type']
+        ]
     },
     posts_meta: {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
@@ -86,6 +90,7 @@ module.exports = {
         twitter: {type: 'string', maxlength: 2000, nullable: true},
         accessibility: {type: 'text', maxlength: 65535, nullable: true},
         status: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'active'},
+        // NOTE: unused at the moment and reserved for future features
         locale: {type: 'string', maxlength: 6, nullable: true},
         visibility: {
             type: 'string',
@@ -142,11 +147,6 @@ module.exports = {
     permissions_roles: {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
         role_id: {type: 'string', maxlength: 24, nullable: false},
-        permission_id: {type: 'string', maxlength: 24, nullable: false}
-    },
-    permissions_apps: {
-        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
-        app_id: {type: 'string', maxlength: 24, nullable: false},
         permission_id: {type: 'string', maxlength: 24, nullable: false}
     },
     settings: {
@@ -232,41 +232,6 @@ module.exports = {
         post_id: {type: 'string', maxlength: 24, nullable: false, references: 'posts.id'},
         tag_id: {type: 'string', maxlength: 24, nullable: false, references: 'tags.id'},
         sort_order: {type: 'integer', nullable: false, unsigned: true, defaultTo: 0}
-    },
-    apps: {
-        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
-        name: {type: 'string', maxlength: 191, nullable: false, unique: true},
-        slug: {type: 'string', maxlength: 191, nullable: false, unique: true},
-        version: {type: 'string', maxlength: 50, nullable: false},
-        status: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'inactive'},
-        created_at: {type: 'dateTime', nullable: false},
-        created_by: {type: 'string', maxlength: 24, nullable: false},
-        updated_at: {type: 'dateTime', nullable: true},
-        updated_by: {type: 'string', maxlength: 24, nullable: true}
-    },
-    app_settings: {
-        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
-        key: {type: 'string', maxlength: 50, nullable: false, unique: true},
-        value: {type: 'text', maxlength: 65535, nullable: true},
-        app_id: {type: 'string', maxlength: 24, nullable: false, references: 'apps.id'},
-        created_at: {type: 'dateTime', nullable: false},
-        created_by: {type: 'string', maxlength: 24, nullable: false},
-        updated_at: {type: 'dateTime', nullable: true},
-        updated_by: {type: 'string', maxlength: 24, nullable: true}
-    },
-    app_fields: {
-        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
-        key: {type: 'string', maxlength: 50, nullable: false},
-        value: {type: 'text', maxlength: 65535, nullable: true},
-        type: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'html'},
-        app_id: {type: 'string', maxlength: 24, nullable: false, references: 'apps.id'},
-        relatable_id: {type: 'string', maxlength: 24, nullable: false},
-        relatable_type: {type: 'string', maxlength: 50, nullable: false, defaultTo: 'posts'},
-        active: {type: 'bool', nullable: false, defaultTo: true},
-        created_at: {type: 'dateTime', nullable: false},
-        created_by: {type: 'string', maxlength: 24, nullable: false},
-        updated_at: {type: 'dateTime', nullable: true},
-        updated_by: {type: 'string', maxlength: 24, nullable: true}
     },
     invites: {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
@@ -373,6 +338,11 @@ module.exports = {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
         uuid: {type: 'string', maxlength: 36, nullable: true, unique: true, validations: {isUUID: true}},
         email: {type: 'string', maxlength: 191, nullable: false, unique: true, validations: {isEmail: true}},
+        status: {
+            type: 'string', maxlength: 50, nullable: false, defaultTo: 'free', validations: {
+                isIn: [['free', 'paid']]
+            }
+        },
         name: {type: 'string', maxlength: 191, nullable: true},
         note: {type: 'string', maxlength: 2000, nullable: true},
         geolocation: {type: 'string', maxlength: 2000, nullable: true},
@@ -427,10 +397,17 @@ module.exports = {
         updated_at: {type: 'dateTime', nullable: true},
         updated_by: {type: 'string', maxlength: 24, nullable: true},
         /* Below fields eventually should be normalised e.g. stripe_plans table, link to here on plan_id */
-        plan_nickname: {type: 'string', maxlength: 50, nullable: false},
+        plan_nickname: {type: 'string', maxlength: 50, nullable: true},
         plan_interval: {type: 'string', maxlength: 50, nullable: false},
         plan_amount: {type: 'integer', nullable: false},
         plan_currency: {type: 'string', maxLength: 3, nullable: false}
+    },
+    members_subscribe_events: {
+        id: {type: 'string', maxlength: 24, nullable: false, primary: true},
+        member_id: {type: 'string', maxlength: 24, nullable: false, unique: false, references: 'members.id', cascadeDelete: true},
+        subscribed: {type: 'bool', nullable: false, defaultTo: true},
+        created_at: {type: 'dateTime', nullable: false},
+        source: {type: 'string', maxlength: 50, nullable: true}
     },
     actions: {
         id: {type: 'string', maxlength: 24, nullable: false, primary: true},
