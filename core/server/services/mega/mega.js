@@ -92,19 +92,18 @@ const sendTestEmail = async (postModel, toEmails) => {
 
 const addEmail = async (postModel, options) => {
     const knexOptions = _.pick(options, ['transacting', 'forUpdate']);
-    const filterOptions = Object.assign({}, knexOptions, {limit: 1});
+    const filterOptions = Object.assign({}, knexOptions, {filter: 'subscribed:true', limit: 1});
 
     const emailRecipientFilter = postModel.get('email_recipient_filter');
 
     switch (emailRecipientFilter) {
     case 'paid':
-        filterOptions.filter = 'subscribed:true+status:paid';
+        filterOptions.paid = true;
         break;
     case 'free':
-        filterOptions.filter = 'subscribed:true+status:free';
+        filterOptions.paid = false;
         break;
     case 'all':
-        filterOptions.filter = 'subscribed:true';
         break;
     case 'none':
         throw new Error('Cannot sent email to "none" email_recipient_filter');
@@ -289,19 +288,18 @@ async function getEmailMemberRows({emailModel, options}) {
     const knexOptions = _.pick(options, ['transacting', 'forUpdate']);
 
     // TODO: this will clobber a user-assigned filter if/when we allow emails to be sent to filtered member lists
-    const filterOptions = Object.assign({}, knexOptions);
+    const filterOptions = Object.assign({}, knexOptions, {filter: 'subscribed:true'});
 
     const recipientFilter = emailModel.get('recipient_filter');
 
     switch (recipientFilter) {
     case 'paid':
-        filterOptions.filter = 'subscribed:true+status:paid';
+        filterOptions.paid = true;
         break;
     case 'free':
-        filterOptions.filter = 'subscribed:true+status:free';
+        filterOptions.paid = false;
         break;
     case 'all':
-        filterOptions.filter = 'subscribed:true';
         break;
     default:
         throw new Error(`Unknown recipient_filter ${recipientFilter}`);

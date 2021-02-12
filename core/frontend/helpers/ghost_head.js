@@ -2,7 +2,7 @@
 // Usage: `{{ghost_head}}`
 //
 // Outputs scripts and other assets at the top of a Ghost theme
-const {metaData, escapeExpression, SafeString, logging, settingsCache, config, blogIcon, urlUtils} = require('../services/proxy');
+const {metaData, escapeExpression, SafeString, logging, settingsCache, config, blogIcon, labs, urlUtils} = require('../services/proxy');
 const _ = require('lodash');
 const debug = require('ghost-ignition').debug('ghost_head');
 const templateStyles = require('./tpl/styles');
@@ -41,7 +41,7 @@ function getMembersHelper() {
     const stripeDirectPublishableKey = settingsCache.get('stripe_publishable_key');
     const stripeConnectAccountId = settingsCache.get('stripe_connect_account_id');
 
-    let membersHelper = `<script defer src="https://unpkg.com/@tryghost/portal@~1.0.0-rc/umd/portal.min.js" data-ghost="${urlUtils.getSiteUrl()}"></script>`;
+    let membersHelper = `<script defer src="https://unpkg.com/@tryghost/portal@~0.15.0/umd/portal.min.js" data-ghost="${urlUtils.getSiteUrl()}"></script>`;
     membersHelper += (`<style> ${templateStyles}</style>`);
     if ((!!stripeDirectSecretKey && !!stripeDirectPublishableKey) || !!stripeConnectAccountId) {
         membersHelper += '<script async src="https://js.stripe.com/v3/"></script>';
@@ -167,7 +167,7 @@ module.exports = function ghost_head(options) { // eslint-disable-line camelcase
                     }
                 }
 
-                if (!_.includes(context, 'amp')) {
+                if (!_.includes(context, 'amp') && labs.isSet('members')) {
                     head.push(getMembersHelper());
                 }
             }

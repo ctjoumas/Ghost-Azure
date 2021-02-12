@@ -19,8 +19,12 @@ const stoppable = require('stoppable');
  * ## GhostServer
  */
 class GhostServer {
-    constructor() {
-        this.rootApp = null;
+    /**
+     * @constructor
+     * @param {Object} rootApp - parent express instance
+     */
+    constructor(rootApp) {
+        this.rootApp = rootApp;
         this.httpServer = null;
 
         // Expose config module for use externally.
@@ -159,18 +163,14 @@ class GhostServer {
      * Stops the server, handles cleanup and exits the process = a full shutdown
      * Called on SIGINT or SIGTERM
      */
-    async shutdown(code = 0) {
+    async shutdown() {
         try {
             logging.warn(i18n.t('notices.httpServer.ghostIsShuttingDown'));
             await this.stop();
-            setTimeout(() => {
-                process.exit(code);
-            }, 100);
+            process.exit(0);
         } catch (error) {
             logging.error(error);
-            setTimeout(() => {
-                process.exit(1);
-            }, 100);
+            process.exit(-1);
         }
     }
 
@@ -198,15 +198,6 @@ class GhostServer {
             this.httpServer = null;
             this._logStopMessages();
         }
-    }
-
-    /**
-    * @param  {Object} externalApp - express app instance
-    * @return {Promise} Resolves once Ghost has switched HTTP Servers
-    */
-    async swapHttpApp(externalApp) {
-        await this._stopServer();
-        await this.start(externalApp);
     }
 
     /**

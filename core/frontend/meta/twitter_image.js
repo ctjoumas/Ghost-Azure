@@ -17,10 +17,6 @@ function getTwitterImage(data) {
             return urlUtils.relativeToAbsolute(contextObject.twitter_image);
         } else if (contextObject.feature_image) {
             return urlUtils.relativeToAbsolute(contextObject.feature_image);
-        } else if (settingsCache.get('twitter_image')) {
-            return urlUtils.relativeToAbsolute(settingsCache.get('twitter_image'));
-        } else if (settingsCache.get('cover_image')) {
-            return urlUtils.relativeToAbsolute(settingsCache.get('cover_image'));
         }
     }
 
