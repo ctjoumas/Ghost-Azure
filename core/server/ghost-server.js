@@ -19,12 +19,8 @@ const stoppable = require('stoppable');
  * ## GhostServer
  */
 class GhostServer {
-    /**
-     * @constructor
-     * @param {Object} rootApp - parent express instance
-     */
-    constructor(rootApp) {
-        this.rootApp = rootApp;
+    constructor() {
+        this.rootApp = null;
         this.httpServer = null;
 
         // Expose config module for use externally.
@@ -86,7 +82,7 @@ class GhostServer {
             self.httpServer.on('error', function (error) {
                 let ghostError;
 
-                if (error.errno === 'EADDRINUSE') {
+                if (error.code === 'EADDRINUSE') {
                     ghostError = new errors.GhostError({
                         message: i18n.t('errors.httpServer.addressInUse.error'),
                         context: i18n.t('errors.httpServer.addressInUse.context', {port: config.get('server').port}),
@@ -143,6 +139,7 @@ class GhostServer {
                     }, 5000);
                 }
 
+                debug('server announcing readiness');
                 return GhostServer.announceServerReadiness()
                     .finally(() => {
                         resolve(self);
@@ -163,14 +160,18 @@ class GhostServer {
      * Stops the server, handles cleanup and exits the process = a full shutdown
      * Called on SIGINT or SIGTERM
      */
-    async shutdown() {
+    async shutdown(code = 0) {
         try {
             logging.warn(i18n.t('notices.httpServer.ghostIsShuttingDown'));
             await this.stop();
-            process.exit(0);
+            setTimeout(() => {
+                process.exit(code);
+            }, 100);
         } catch (error) {
             logging.error(error);
-            process.exit(-1);
+            setTimeout(() => {
+                process.exit(1);
+            }, 100);
         }
     }
 
@@ -182,14 +183,12 @@ class GhostServer {
      * @returns {Promise} Resolves once Ghost has stopped
      */
     async stop() {
-        // If we never fully started, there's nothing to stop
-        if (this.httpServer === null) {
-            return;
-        }
-
         try {
-            // We stop the server first so that no new long running requests or processes can be started
-            await this._stopServer();
+            // If we never fully started, there's nothing to stop
+            if (this.httpServer && this.httpServer.listening) {
+                // We stop the server first so that no new long running requests or processes can be started
+                await this._stopServer();
+            }
             // Do all of the cleanup tasks
             await this._cleanup();
         } finally {
@@ -198,6 +197,15 @@ class GhostServer {
             this.httpServer = null;
             this._logStopMessages();
         }
+    }
+
+    /**
+    * @param  {Object} externalApp - express app instance
+    * @return {Promise} Resolves once Ghost has switched HTTP Servers
+    */
+    async swapHttpApp(externalApp) {
+        await this._stopServer();
+        await this.start(externalApp);
     }
 
     /**
@@ -224,7 +232,14 @@ class GhostServer {
      */
     async _stopServer() {
         return new Promise((resolve, reject) => {
-            this.httpServer.stop((err, status) => (err ? reject(err) : resolve(status)));
+            this.httpServer
+                .stop((error, status) => {
+                    if (error) {
+                        return reject(error);
+                    }
+
+                    return resolve(status);
+                });
         });
     }
 
@@ -319,6 +334,7 @@ module.exports.announceServerReadiness = function (error = null) {
         message.started = false;
         message.error = error;
     } else {
+        debug('emit: server.start');
         events.emit('server.start');
     }
 
