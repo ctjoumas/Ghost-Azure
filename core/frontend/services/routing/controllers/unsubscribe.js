@@ -1,10 +1,15 @@
 const debug = require('ghost-ignition').debug('services:routing:controllers:unsubscribe');
 const path = require('path');
 const megaService = require('../../../../server/services/mega');
+const labsService = require('../../../../server/services/labs');
 const helpers = require('../../../services/routing/helpers');
 
-module.exports = async function unsubscribeController(req, res) {
+module.exports = async function unsubscribeController(req, res, next) {
     debug('unsubscribeController');
+
+    if (!labsService.isSet('members')) {
+        return next();
+    }
 
     let data = {};
 

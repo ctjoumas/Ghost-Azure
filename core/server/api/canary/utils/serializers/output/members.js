@@ -14,11 +14,7 @@ module.exports = {
     exportCSV: createSerializer('exportCSV', exportCSV),
 
     importCSV: createSerializer('importCSV', passthrough),
-    stats: createSerializer('stats', passthrough),
-    memberStats: createSerializer('memberStats', passthrough),
-    mrrStats: createSerializer('mrrStats', passthrough),
-    subscriberStats: createSerializer('subscriberStats', passthrough),
-    grossVolumeStats: createSerializer('grossVolumeStats', passthrough)
+    stats: createSerializer('stats', passthrough)
 };
 
 /**
@@ -77,8 +73,8 @@ function serializeMember(member, options) {
     const json = member.toJSON(options);
 
     let comped = false;
-    if (json.subscriptions) {
-        const hasCompedSubscription = !!json.subscriptions.find(
+    if (json.stripe && json.stripe.subscriptions) {
+        const hasCompedSubscription = !!json.stripe.subscriptions.find(
             /**
              * @param {SerializedMemberStripeSubscription} sub
              */
@@ -90,7 +86,6 @@ function serializeMember(member, options) {
             comped = true;
         }
     }
-    const subscriptions = json.subscriptions || [];
 
     return {
         id: json.id,
@@ -103,14 +98,13 @@ function serializeMember(member, options) {
         created_at: json.created_at,
         updated_at: json.updated_at,
         labels: json.labels,
-        subscriptions: subscriptions,
+        stripe: json.stripe,
         avatar_image: json.avatar_image,
         comped: comped,
         email_count: json.email_count,
         email_opened_count: json.email_opened_count,
         email_open_rate: json.email_open_rate,
-        email_recipients: json.email_recipients,
-        status: json.status
+        email_recipients: json.email_recipients
     };
 }
 
@@ -151,14 +145,13 @@ function createSerializer(debugString, serialize) {
  * @prop {string} created_at
  * @prop {string} updated_at
  * @prop {string[]} labels
- * @prop {SerializedMemberStripeSubscription[]} subscriptions
+ * @prop {null|SerializedMemberStripeData} stripe
  * @prop {string} avatar_image
  * @prop {boolean} comped
  * @prop {number} email_count
  * @prop {number} email_opened_count
  * @prop {number} email_open_rate
  * @prop {null|SerializedEmailRecipient[]} email_recipients
- * @prop {'free'|'paid'} status
  */
 
 /**

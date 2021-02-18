@@ -20,13 +20,10 @@ const defaultPostSlugs = [
 ];
 
 function getSlackSettings() {
-    const username = settingsCache.get('slack_username');
-    const url = settingsCache.get('slack_url');
-
-    return {
-        username,
-        url
-    };
+    const setting = settingsCache.get('slack');
+    // This might one day have multiple entries, for now its always a array
+    // and we return the first item or an empty object
+    return setting ? setting[0] : {};
 }
 
 function ping(post) {

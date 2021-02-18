@@ -401,13 +401,9 @@
         }
     },
     "slack": {
-        "slack_url": {
-            "defaultValue": "",
-            "type": "string"
-        },
-        "slack_username": {
-            "defaultValue": "Ghost",
-            "type": "string"
+        "slack": {
+            "defaultValue": "[{\"url\":\"\", \"username\":\"Ghost\"}]",
+            "type": "array"
         }
     },
     "unsplash": {
