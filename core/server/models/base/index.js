@@ -1254,8 +1254,7 @@ ghostBookshelf.Model = ghostBookshelf.Model.extend({
 
             // exclude fields if enabled
             if (exclude) {
-                let toSelect = _.keys(schema.tables[tableNames[modelName]]);
-                toSelect = toSelect.filter(key => !(key.startsWith('@@')));
+                const toSelect = _.keys(schema.tables[tableNames[modelName]]);
 
                 _.each(exclude, (key) => {
                     if (toSelect.indexOf(key) !== -1) {

@@ -47,7 +47,6 @@ const privateBlogging = {
         res.isPrivateBlog = true;
 
         return session({
-            name: 'ghost-private',
             maxAge: constants.ONE_MONTH_MS,
             signed: false,
             sameSite: 'none'
