@@ -63,23 +63,267 @@ function dropColumn(tableName, column, transaction) {
     });
 }
 
-function addUnique(tableName, column, transaction) {
-    return (transaction || db.knex).schema.table(tableName, function (table) {
-        table.unique(column);
-    });
+/**
+ * Checks if unique index exists in a table over the given columns.
+ *
+ * @param {string} tableName - name of the table to add unique constraint to
+ * @param {string|[string]} columns - column(s) to form unique constraint with
+ * @param {Object} transaction - connection object containing knex reference
+ * @param {Object} transaction.knex - knex instance
+ */
+async function hasUnique(tableName, columns, transaction) {
+    const knex = (transaction || db.knex);
+    const client = knex.client.config.client;
+    const columnNames = _.isArray(columns) ? columns.join('_') : columns;
+    const constraintName = `${tableName}_${columnNames}_unique`;
+
+    if (client === 'mysql') {
+        const dbName = knex.client.config.connection.database;
+        const [rawConstraints] = await knex.raw(`
+                SELECT CONSTRAINT_NAME
+                FROM information_schema.TABLE_CONSTRAINTS
+                WHERE 1=1
+                AND CONSTRAINT_SCHEMA=:dbName
+                AND TABLE_NAME=:tableName
+                AND CONSTRAINT_TYPE='UNIQUE'`, {dbName, tableName});
+        const dbConstraints = rawConstraints.map(c => c.CONSTRAINT_NAME);
+
+        if (dbConstraints.includes(constraintName)) {
+            return true;
+        }
+    } else {
+        const rawConstraints = await knex.raw(`PRAGMA index_list('${tableName}');`);
+        const dbConstraints = rawConstraints.map(c => c.name);
+
+        if (dbConstraints.includes(constraintName)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
-function dropUnique(tableName, column, transaction) {
-    return (transaction || db.knex).schema.table(tableName, function (table) {
-        table.dropUnique(column);
-    });
+/**
+ * Adds an unique index to a table over the given columns.
+ *
+ * @param {string} tableName - name of the table to add unique constraint to
+ * @param {string|[string]} columns - column(s) to form unique constraint with
+ * @param {Object} transaction - connection object containing knex reference
+ * @param {Object} transaction.knex - knex instance
+ */
+async function addUnique(tableName, columns, transaction) {
+    const hasUniqueConstraint = await hasUnique(tableName, columns, transaction);
+
+    if (!hasUniqueConstraint) {
+        logging.info(`Adding unique constraint for: ${columns} in table ${tableName}`);
+        return (transaction || db.knex).schema.table(tableName, function (table) {
+            table.unique(columns);
+        });
+    } else {
+        logging.warn(`Constraint for: ${columns} already exists for table: ${tableName}`);
+    }
+}
+
+/**
+ * Drops a unique key constraint from a table.
+ *
+ * @param {string} tableName - name of the table to drop unique constraint from
+ * @param {string|[string]} columns - column(s) unique constraint was formed
+ * @param {Object} transaction - connection object containing knex reference
+ * @param {Object} transaction.knex - knex instance
+ */
+async function dropUnique(tableName, columns, transaction) {
+    const hasUniqueConstraint = await hasUnique(tableName, columns, transaction);
+
+    if (hasUniqueConstraint) {
+        logging.info(`Dropping unique constraint for: ${columns} in table: ${tableName}`);
+        return (transaction || db.knex).schema.table(tableName, function (table) {
+            table.dropUnique(columns);
+        });
+    } else {
+        logging.warn(`Constraint for: ${columns} does not exist for table: ${tableName}`);
+    }
+}
+
+/**
+ * Checks if a foreign key exists in a table over the given columns.
+ *
+ * @param {Object} configuration - contains all configuration for this function
+ * @param {string} configuration.fromTableName - name of the table to add the foreign key to
+ * @param {string} configuration.fromColumn - column of the table to add the foreign key to
+ * @param {string} configuration.toTableName - name of the table to point the foreign key to
+ * @param {string} configuration.toColumn - column of the table to point the foreign key to
+ * @param {Object} configuration.transaction - connection object containing knex reference
+ * @param {Object} configuration.transaction.knex - knex instance
+ */
+async function hasForeign({fromTable, fromColumn, toTable, toColumn, transaction}) {
+    const knex = (transaction || db.knex);
+    const client = knex.client.config.client;
+
+    if (client === 'mysql') {
+        const dbName = knex.client.config.connection.database;
+        const [rawConstraints] = await knex.raw(`
+            SELECT i.TABLE_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME
+            FROM information_schema.TABLE_CONSTRAINTS i
+            INNER JOIN information_schema.KEY_COLUMN_USAGE k ON i.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+            WHERE i.CONSTRAINT_TYPE = 'FOREIGN KEY'
+            AND i.CONSTRAINT_SCHEMA=:dbName
+            AND i.TABLE_NAME = :fromTable
+            AND k.COLUMN_NAME = :fromColumn
+            AND k.REFERENCED_TABLE_NAME = :toTable
+            AND k.REFERENCED_COLUMN_NAME = :toColumn`, {dbName, fromTable, fromColumn, toTable, toColumn});
+
+        return rawConstraints.length >= 1;
+    } else {
+        const foreignKeys = await knex.raw(`PRAGMA foreign_key_list('${fromTable}');`);
+
+        const hasForeignKey = foreignKeys.some(foreignKey => foreignKey.table === toTable && foreignKey.from === fromColumn && foreignKey.to === toColumn);
+
+        return hasForeignKey;
+    }
+}
+
+/**
+ * Adds a foreign key to a table.
+ *
+ * @param {Object} configuration - contains all configuration for this function
+ * @param {string} configuration.fromTableName - name of the table to add the foreign key to
+ * @param {string} configuration.fromColumn - column of the table to add the foreign key to
+ * @param {string} configuration.toTableName - name of the table to point the foreign key to
+ * @param {string} configuration.toColumn - column of the table to point the foreign key to
+ * @param {Boolean} configuration.cascadeDelete - adds the "on delete cascade" option if true
+ * @param {Object} configuration.transaction - connection object containing knex reference
+ * @param {Object} configuration.transaction.knex - knex instance
+ */
+async function addForeign({fromTable, fromColumn, toTable, toColumn, cascadeDelete = false, transaction}) {
+    const hasForeignKey = await hasForeign({fromTable, fromColumn, toTable, toColumn, transaction});
+
+    if (!hasForeignKey) {
+        logging.info(`Adding foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn}`);
+
+        //disable and re-enable foreign key checks on sqlite because of https://github.com/knex/knex/issues/4155
+        let foreignKeysEnabled;
+        if (db.knex.client.config.client === 'sqlite3') {
+            foreignKeysEnabled = await db.knex.raw('PRAGMA foreign_keys;');
+            if (foreignKeysEnabled[0].foreign_keys) {
+                await db.knex.raw('PRAGMA foreign_keys = OFF;');
+            }
+        }
+
+        await (transaction || db.knex).schema.table(fromTable, function (table) {
+            if (cascadeDelete) {
+                table.foreign(fromColumn).references(`${toTable}.${toColumn}`).onDelete('CASCADE');
+            } else {
+                table.foreign(fromColumn).references(`${toTable}.${toColumn}`);
+            }
+        });
+
+        if (db.knex.client.config.client === 'sqlite3') {
+            if (foreignKeysEnabled[0].foreign_keys) {
+                await db.knex.raw('PRAGMA foreign_keys = ON;');
+            }
+        }
+    } else {
+        logging.warn(`Skipped adding foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - foreign key already exists`);
+    }
+}
+
+/**
+ * Drops a foreign key from a table.
+ *
+ * @param {Object} configuration - contains all configuration for this function
+ * @param {string} configuration.fromTableName - name of the table to add the foreign key to
+ * @param {string} configuration.fromColumn - column of the table to add the foreign key to
+ * @param {string} configuration.toTableName - name of the table to point the foreign key to
+ * @param {string} configuration.toColumn - column of the table to point the foreign key to
+ * @param {Object} configuration.transaction - connection object containing knex reference
+ * @param {Object} configuration.transaction.knex - knex instance
+ */
+async function dropForeign({fromTable, fromColumn, toTable, toColumn, transaction}) {
+    const hasForeignKey = await hasForeign({fromTable, fromColumn, toTable, toColumn, transaction});
+
+    if (hasForeignKey) {
+        logging.info(`Dropping foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn}`);
+
+        //disable and re-enable foreign key checks on sqlite because of https://github.com/knex/knex/issues/4155
+        let foreignKeysEnabled;
+        if (db.knex.client.config.client === 'sqlite3') {
+            foreignKeysEnabled = await db.knex.raw('PRAGMA foreign_keys;');
+            if (foreignKeysEnabled[0].foreign_keys) {
+                await db.knex.raw('PRAGMA foreign_keys = OFF;');
+            }
+        }
+
+        await (transaction || db.knex).schema.table(fromTable, function (table) {
+            table.dropForeign(fromColumn);
+        });
+
+        if (db.knex.client.config.client === 'sqlite3') {
+            if (foreignKeysEnabled[0].foreign_keys) {
+                await db.knex.raw('PRAGMA foreign_keys = ON;');
+            }
+        }
+    } else {
+        logging.warn(`Skipped dropping foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - foreign key does not exist`);
+    }
+}
+
+/**
+ * Checks if primary key index exists in a table over the given columns.
+ *
+ * @param {string} tableName - name of the table to add primary key constraint to
+ * @param {Object} transaction - connnection object containing knex reference
+ * @param {Object} transaction.knex - knex instance
+ */
+async function hasPrimaryKey(tableName, transaction) {
+    const knex = (transaction || db.knex);
+    const client = knex.client.config.client;
+
+    if (client === 'mysql') {
+        const dbName = knex.client.config.connection.database;
+        const [rawConstraints] = await knex.raw(`
+                SELECT CONSTRAINT_NAME
+                FROM information_schema.TABLE_CONSTRAINTS
+                WHERE 1=1
+                AND CONSTRAINT_SCHEMA=:dbName
+                AND TABLE_NAME=:tableName
+                AND CONSTRAINT_TYPE='PRIMARY KEY'`, {dbName, tableName});
+
+        return rawConstraints.length > 0;
+    } else {
+        const rawConstraints = await knex.raw(`PRAGMA index_list('${tableName}');`);
+        const tablePrimaryKey = rawConstraints.find(c => c.origin === 'pk');
+
+        return tablePrimaryKey;
+    }
+}
+
+/**
+ * Adds an primary key index to a table over the given columns.
+ *
+ * @param {string} tableName - name of the table to add primaykey  constraint to
+ * @param {string|[string]} columns - column(s) to form primary key constraint with
+ * @param {Object} transaction - connnection object containing knex reference
+ * @param {Object} transaction.knex - knex instance
+ */
+async function addPrimaryKey(tableName, columns, transaction) {
+    const hasUniqueConstraint = await hasPrimaryKey(tableName, transaction);
+
+    if (!hasUniqueConstraint) {
+        logging.info(`Adding primary key constraint for: ${columns} in table ${tableName}`);
+        return (transaction || db.knex).schema.table(tableName, function (table) {
+            table.primary(columns);
+        });
+    } else {
+        logging.warn(`Primary key constraint for: ${columns} already exists for table: ${tableName}`);
+    }
 }
 
 /**
  * https://github.com/tgriesser/knex/issues/1303
  * createTableIfNotExists can throw error if indexes are already in place
  */
-function createTable(table, transaction) {
+function createTable(table, transaction, tableSpec = schema[table]) {
     return (transaction || db.knex).schema.hasTable(table)
         .then(function (exists) {
             if (exists) {
@@ -87,21 +331,16 @@ function createTable(table, transaction) {
             }
 
             return (transaction || db.knex).schema.createTable(table, function (t) {
-                let tableIndexes = [];
+                Object.keys(tableSpec)
+                    .filter(column => !(column.startsWith('@@')))
+                    .forEach(column => addTableColumn(table, t, column, tableSpec[column]));
 
-                const columnKeys = _.keys(schema[table]);
-                _.each(columnKeys, function (column) {
-                    if (column === '@@INDEXES@@') {
-                        tableIndexes = schema[table]['@@INDEXES@@'];
-                        return;
-                    }
-
-                    return addTableColumn(table, t, column);
-                });
-
-                _.each(tableIndexes, function (index) {
-                    t.index(index);
-                });
+                if (tableSpec['@@INDEXES@@']) {
+                    tableSpec['@@INDEXES@@'].forEach(index => t.index(index));
+                }
+                if (tableSpec['@@UNIQUE_CONSTRAINTS@@']) {
+                    tableSpec['@@UNIQUE_CONSTRAINTS@@'].forEach(unique => t.unique(unique));
+                }
             });
         });
 }
@@ -148,8 +387,6 @@ function checkTables(transaction) {
     }
 }
 
-const createLog = type => msg => logging[type](msg);
-
 function createColumnMigration(...migrations) {
     async function runColumnMigration(conn, migration) {
         const {
@@ -164,11 +401,10 @@ function createColumnMigration(...migrations) {
         const hasColumn = await conn.schema.hasColumn(table, column);
         const isInCorrectState = dbIsInCorrectState(hasColumn);
 
-        const log = createLog(isInCorrectState ? 'warn' : 'info');
-
-        log(`${operationVerb} ${table}.${column} column`);
-
-        if (!isInCorrectState) {
+        if (isInCorrectState) {
+            logging.warn(`${operationVerb} ${table}.${column} column - skipping as table is correct`);
+        } else {
+            logging.info(`${operationVerb} ${table}.${column} column`);
             await operation(table, column, conn, columnDefinition);
         }
     }
@@ -188,6 +424,9 @@ module.exports = {
     getIndexes: getIndexes,
     addUnique: addUnique,
     dropUnique: dropUnique,
+    addPrimaryKey: addPrimaryKey,
+    addForeign: addForeign,
+    dropForeign: dropForeign,
     addColumn: addColumn,
     dropColumn: dropColumn,
     getColumns: getColumns,
