@@ -102,31 +102,6 @@ production stylesheet in assets/built/screen.css
     object-fit: cover;
 }
 
-.site-header-cover:before {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 10;
-    display: block;
-    background: rgba(0,0,0,0.18);
-}
-
-.site-header-cover:after {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: auto;
-    left: 0;
-    z-index: 10;
-    display: block;
-    height: 140px;
-    background: linear-gradient(rgba(0,0,0,0.95),rgba(0,0,0,0));
-}
-
 .site-header-content {
     position: relative;
     z-index: 100;
@@ -151,6 +126,7 @@ production stylesheet in assets/built/screen.css
 }
 
 .site-header-content p {
+    z-index: 10;
     max-width: 600px;
     margin: 0 auto;
     line-height: 1.2em;
@@ -229,7 +205,7 @@ production stylesheet in assets/built/screen.css
 }
 
 .gh-head-logo img {
-    max-height: 40px;
+    max-height: 26px;
 }
 
 
@@ -830,12 +806,11 @@ make sure this only happens on large viewports / desktop-ish devices.
 }
 
 .article-title {
-    margin: 0;
     color: color-mod(var(--color-darkgrey) l(-5%));
 }
 
 .article-excerpt {
-    margin: 20px 0 10px;
+    margin: 0 0 1rem;
     font-size: 2rem;
     line-height: 1.4em;
     opacity: 0.6;
@@ -976,7 +951,7 @@ is the very first element in the post content */
     background: var(--ghost-accent-color);
 }
 
-.gh-content :not(pre) code {
+.gh-content :not(pre) > code {
     vertical-align: middle;
     padding: 0.15em 0.4em 0.15em;
     border: #e1eaef 1px solid;
@@ -988,10 +963,15 @@ is the very first element in the post content */
     border-radius: 0.25em;
 }
 
-.gh-content > pre {
+.gh-content pre {
+    overflow-x: auto;
     overflow: scroll;
     padding: 16px 20px;
-    background: rgba(255,255,255,0.8);
+    border: 1px solid color-mod(var(--color-darkgrey) l(-20%));
+    color: var(--color-wash);
+    font-size: 1.4rem;
+    line-height: 1.5em;
+    background: var(--color-darkgrey);
     border-radius: 5px;
     box-shadow: 0 2px 6px -2px rgba(0,0,0,.1), 0 0 1px rgba(0,0,0,.4);
 }
@@ -1061,8 +1041,10 @@ except for when immediately preceeded by a heading */
 /* Galleries
 /* ---------------------------------------------------------- */
 
-/* When there are two galleries in a two, reduce margin
+/* When there galleries are mixed with images, reduce margin
 between them, so it looks like 1 big gallery */
+.kg-image-card + .kg-gallery-card,
+.kg-gallery-card + .kg-image-card,
 .kg-gallery-card + .kg-gallery-card {
     margin-top: 0.75em;
 }
@@ -1367,6 +1349,10 @@ Ghost editor. */
     opacity: 0.15;
 }
 
+.page-template .article-title {
+    margin-bottom: 0;
+}
+
 
 /* 7.3. Subscribe
 /* ---------------------------------------------------------- */
@@ -1376,7 +1362,7 @@ Ghost editor. */
     padding: 9vmin 4vmin 10vmin;
     color: #fff;
     text-align: center;
-    background: var(--ghost-accent-color);
+    background: var(--color-darkgrey);
 }
 
 .footer-cta h2 {
@@ -1500,6 +1486,7 @@ Ghost editor. */
 }
 
 .author-profile p {
+    margin: 0 0 1.5em;
     color: color-mod(var(--color-midgrey) l(-8%));
 }
 
