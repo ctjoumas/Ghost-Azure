@@ -3,6 +3,7 @@ const {i18n} = require('../../lib/common');
 const errors = require('@tryghost/errors');
 const urlUtils = require('../../../shared/url-utils');
 const {mega} = require('../../services/mega');
+const membersService = require('../../services/members');
 const allowedIncludes = ['tags', 'authors', 'authors.roles', 'email'];
 const unsafeAttrs = ['status', 'authors', 'visibility'];
 
@@ -153,6 +154,11 @@ module.exports = {
             unsafeAttrs: unsafeAttrs
         },
         async query(frame) {
+            /**Check host limits for members when send email is true**/
+            if ((frame.options.email_recipient_filter && frame.options.email_recipient_filter !== 'none') || frame.options.send_email_when_published) {
+                await membersService.checkHostLimit();
+            }
+
             let model;
             if (!frame.options.email_recipient_filter && frame.options.send_email_when_published) {
                 await models.Base.transaction(async (transacting) => {
@@ -189,7 +195,7 @@ module.exports = {
                     let postEmail = model.relations.email;
 
                     if (!postEmail) {
-                        const email = await mega.addEmail(model, Object.assign({}, frame.options, {apiVersion: 'v3'}));
+                        const email = await mega.addEmail(model, frame.options);
                         model.set('email', email);
                     } else if (postEmail && postEmail.get('status') === 'failed') {
                         const email = await mega.retryFailedEmail(postEmail);

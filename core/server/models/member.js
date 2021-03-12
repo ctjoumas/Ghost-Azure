@@ -1,6 +1,7 @@
 const ghostBookshelf = require('./base');
 const uuid = require('uuid');
 const _ = require('lodash');
+const {sequence} = require('@tryghost/promise');
 const config = require('../../shared/config');
 const crypto = require('crypto');
 
@@ -9,7 +10,6 @@ const Member = ghostBookshelf.Model.extend({
 
     defaults() {
         return {
-            status: 'free',
             subscribed: true,
             uuid: uuid.v4(),
             email_count: 0,
@@ -67,7 +67,9 @@ const Member = ghostBookshelf.Model.extend({
         const defaultSerializedObject = ghostBookshelf.Model.prototype.serialize.call(this, options);
 
         if (defaultSerializedObject.stripeSubscriptions) {
-            defaultSerializedObject.subscriptions = defaultSerializedObject.stripeSubscriptions;
+            defaultSerializedObject.stripe = {
+                subscriptions: defaultSerializedObject.stripeSubscriptions
+            };
             delete defaultSerializedObject.stripeSubscriptions;
         }
 
@@ -105,6 +107,7 @@ const Member = ghostBookshelf.Model.extend({
 
     onSaving: function onSaving(model, attr, options) {
         let labelsToSave = [];
+        let ops = [];
 
         if (_.isUndefined(this.get('labels'))) {
             this.unset('labels');
@@ -130,23 +133,26 @@ const Member = ghostBookshelf.Model.extend({
             this.set('labels', labelsToSave);
         }
 
-        this.handleAttachedModels(model);
-
         // CASE: Detect existing labels with same case-insensitive name and replace
-        return ghostBookshelf.model('Label')
-            .findAll(Object.assign({
-                columns: ['id', 'name']
-            }, _.pick(options, 'transacting')))
-            .then((labels) => {
-                labelsToSave.forEach((label) => {
-                    let existingLabel = labels.find((lab) => {
-                        return label.name.toLowerCase() === lab.get('name').toLowerCase();
+        ops.push(function updateLabels() {
+            return ghostBookshelf.model('Label')
+                .findAll(Object.assign({
+                    columns: ['id', 'name']
+                }, _.pick(options, 'transacting')))
+                .then((labels) => {
+                    labelsToSave.forEach((label) => {
+                        let existingLabel = labels.find((lab) => {
+                            return label.name.toLowerCase() === lab.get('name').toLowerCase();
+                        });
+                        label.name = (existingLabel && existingLabel.get('name')) || label.name;
                     });
-                    label.name = (existingLabel && existingLabel.get('name')) || label.name;
-                });
 
-                model.set('labels', labelsToSave);
-            });
+                    model.set('labels', labelsToSave);
+                });
+        });
+
+        this.handleAttachedModels(model);
+        return sequence(ops);
     },
 
     handleAttachedModels: function handleAttachedModels(model) {
@@ -207,6 +213,40 @@ const Member = ghostBookshelf.Model.extend({
         queryBuilder.orWhere('members.email', 'like', `%${query}%`);
     },
 
+    // TODO: hacky way to filter by members with an active subscription,
+    // replace with a proper way to do this via filter param.
+    // NOTE: assumes members will have a single subscription
+    customQuery: function customQuery(queryBuilder, options) {
+        if (options.paid === true) {
+            queryBuilder.innerJoin(
+                'members_stripe_customers',
+                'members.id',
+                'members_stripe_customers.member_id'
+            );
+            queryBuilder.innerJoin(
+                'members_stripe_customers_subscriptions',
+                function () {
+                    this.on(
+                        'members_stripe_customers.customer_id',
+                        'members_stripe_customers_subscriptions.customer_id'
+                    ).onIn(
+                        'members_stripe_customers_subscriptions.status',
+                        ['active', 'trialing', 'past_due', 'unpaid']
+                    );
+                }
+            );
+        }
+
+        if (options.paid === false) {
+            queryBuilder.leftJoin(
+                'members_stripe_customers',
+                'members.id',
+                'members_stripe_customers.member_id'
+            );
+            queryBuilder.whereNull('members_stripe_customers.member_id');
+        }
+    },
+
     orderRawQuery(field, direction) {
         if (field === 'email_open_rate') {
             return {
@@ -240,7 +280,8 @@ const Member = ghostBookshelf.Model.extend({
         let options = ghostBookshelf.Model.permittedOptions.call(this, methodName);
 
         if (['findPage', 'findAll'].includes(methodName)) {
-            options = options.concat(['search']);
+            // TODO: remove 'paid' once it's possible to use in a filter
+            options = options.concat(['search', 'paid']);
         }
 
         return options;

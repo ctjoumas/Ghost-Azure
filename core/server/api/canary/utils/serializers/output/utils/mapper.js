@@ -47,6 +47,14 @@ const mapPost = (model, frame) => {
         gating.forPost(jsonModel, frame);
     }
 
+    if (typeof jsonModel.email_recipient_filter === 'undefined') {
+        jsonModel.send_email_when_published = null;
+    } else if (jsonModel.email_recipient_filter === 'none') {
+        jsonModel.send_email_when_published = false;
+    } else {
+        jsonModel.send_email_when_published = true;
+    }
+
     clean.post(jsonModel, frame);
 
     if (frame.options && frame.options.withRelated) {
@@ -88,6 +96,7 @@ const mapPage = (model, frame) => {
     const jsonModel = mapPost(model, frame);
 
     delete jsonModel.email_subject;
+    delete jsonModel.send_email_when_published;
     delete jsonModel.email_recipient_filter;
 
     return jsonModel;
@@ -102,25 +111,9 @@ const mapSettings = (attrs, frame) => {
     //      `forSettings` step. This logic can be rewritten once we get rid of deprecated
     //      fields completely.
     if (_.isArray(attrs)) {
-        const keysToFilter = ['ghost_head', 'ghost_foot'];
-
-        // NOTE: to support edits of deprecated 'slack' setting artificial 'slack_url' and 'slack_username'
-        //       were added to the request body in the input serializer. These should not be returned in response
-        //       body unless directly requested
-        if (frame.original.body && frame.original.body.settings) {
-            const requestedEditSlackUrl = frame.original.body.settings.find(s => s.key === 'slack_url');
-            const requestedEditSlackUsername = frame.original.body.settings.find(s => s.key === 'slack_username');
-
-            if (!requestedEditSlackUrl) {
-                keysToFilter.push('slack_url');
-            }
-
-            if (!requestedEditSlackUsername) {
-                keysToFilter.push('slack_username');
-            }
-        }
-
-        attrs = _.filter(attrs, attr => !(keysToFilter.includes(attr.key)));
+        attrs = _.filter(attrs, (o) => {
+            return o.key !== 'ghost_head' && o.key !== 'ghost_foot';
+        });
     }
 
     return attrs;

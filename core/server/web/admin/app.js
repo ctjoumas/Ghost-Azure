@@ -6,13 +6,10 @@ const constants = require('@tryghost/constants');
 const urlUtils = require('../../../shared/url-utils');
 const shared = require('../shared');
 const adminMiddleware = require('./middleware');
-const preview = require('./preview');
 
 module.exports = function setupAdminApp() {
     debug('Admin setup start');
     const adminApp = express('admin');
-
-    adminApp.use('/preview', preview);
 
     // Admin assets
     // @TODO ensure this gets a local 404 error handler
@@ -43,7 +40,6 @@ module.exports = function setupAdminApp() {
     // Cache headers go last before serving the request
     // Admin is currently set to not be cached at all
     adminApp.use(shared.middlewares.cacheControl('private'));
-
     // Special redirects for the admin (these should have their own cache-control headers)
     adminApp.use(adminMiddleware);
 

@@ -1,7 +1,6 @@
 const ghostBookshelf = require('./base');
 const {i18n} = require('../lib/common');
 const errors = require('@tryghost/errors');
-const urlUtils = require('../../shared/url-utils');
 
 let Tag;
 let Tags;
@@ -41,35 +40,6 @@ Tag = ghostBookshelf.Model.extend({
 
     onSaving: function onSaving(newTag, attr, options) {
         const self = this;
-
-        const urlTransformMap = {
-            feature_image: 'toTransformReady',
-            og_image: 'toTransformReady',
-            twitter_image: 'toTransformReady',
-            codeinjection_head: 'htmlToTransformReady',
-            codeinjection_foot: 'htmlToTransformReady',
-            canonical_url: {
-                method: 'toTransformReady',
-                options: {
-                    ignoreProtocol: false
-                }
-            }
-        };
-
-        Object.entries(urlTransformMap).forEach(([urlAttr, transform]) => {
-            let method = transform;
-            let methodOptions = {};
-
-            if (typeof transform === 'object') {
-                method = transform.method;
-                methodOptions = transform.options || {};
-            }
-
-            if (this.hasChanged(urlAttr) && this.get(urlAttr)) {
-                const transformedValue = urlUtils[method](this.get(urlAttr), methodOptions);
-                this.set(urlAttr, transformedValue);
-            }
-        });
 
         ghostBookshelf.Model.prototype.onSaving.apply(this, arguments);
 

@@ -6,11 +6,10 @@ const Promise = require('bluebird');
 const {sequence} = require('@tryghost/promise');
 const {i18n} = require('../lib/common');
 const errors = require('@tryghost/errors');
-const htmlToPlaintext = require('../../shared/html-to-plaintext');
+const htmlToText = require('html-to-text');
 const ghostBookshelf = require('./base');
 const config = require('../../shared/config');
 const settingsCache = require('../services/settings/cache');
-const limitService = require('../services/limits');
 const mobiledocLib = require('../lib/mobiledoc');
 const relations = require('./relations');
 const urlUtils = require('../../shared/url-utils');
@@ -46,7 +45,7 @@ Post = ghostBookshelf.Model.extend({
     defaults: function defaults() {
         let visibility = 'public';
 
-        if (settingsCache.get('default_content_visibility')) {
+        if (settingsCache.get('labs') && (settingsCache.get('labs').members === true) && settingsCache.get('default_content_visibility')) {
             visibility = settingsCache.get('default_content_visibility');
         }
 
@@ -419,18 +418,18 @@ Post = ghostBookshelf.Model.extend({
             this.set('mobiledoc', JSON.stringify(mobiledocLib.blankDocument));
         }
 
-        // ensure all URLs are stored as transform-ready with __GHOST_URL__ representing config.url
+        // ensure all URLs are stored as relative
         // note: html is not necessary to change because it's a generated later from mobiledoc
         const urlTransformMap = {
-            mobiledoc: 'mobiledocToTransformReady',
-            custom_excerpt: 'htmlToTransformReady',
-            codeinjection_head: 'htmlToTransformReady',
-            codeinjection_foot: 'htmlToTransformReady',
-            feature_image: 'toTransformReady',
-            og_image: 'toTransformReady',
-            twitter_image: 'toTransformReady',
+            mobiledoc: 'mobiledocAbsoluteToRelative',
+            custom_excerpt: 'htmlAbsoluteToRelative',
+            codeinjection_head: 'htmlAbsoluteToRelative',
+            codeinjection_foot: 'htmlAbsoluteToRelative',
+            feature_image: 'absoluteToRelative',
+            og_image: 'absoluteToRelative',
+            twitter_image: 'absoluteToRelative',
             canonical_url: {
-                method: 'toTransformReady',
+                method: 'absoluteToRelative',
                 options: {
                     ignoreProtocol: false
                 }
@@ -482,7 +481,14 @@ Post = ghostBookshelf.Model.extend({
             if (this.get('html') === null) {
                 plaintext = null;
             } else {
-                plaintext = htmlToPlaintext(this.get('html'));
+                plaintext = htmlToText.fromString(this.get('html'), {
+                    wordwrap: 80,
+                    ignoreImage: true,
+                    hideLinkHrefIfSameAsText: true,
+                    preserveNewlines: true,
+                    returnDomByDefault: true,
+                    uppercaseHeadings: false
+                });
             }
 
             // CASE: html is e.g. <p></p>
@@ -1017,7 +1023,7 @@ Post = ghostBookshelf.Model.extend({
     },
 
     // NOTE: the `authors` extension is the parent of the post model. It also has a permissible function.
-    permissible: async function permissible(postModel, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasApiKeyPermission) {
+    permissible: function permissible(postModel, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasApiKeyPermission) {
         let isContributor;
         let isOwner;
         let isAdmin;
@@ -1048,13 +1054,6 @@ Post = ghostBookshelf.Model.extend({
         isEdit = (action === 'edit');
         isAdd = (action === 'add');
         isDestroy = (action === 'destroy');
-
-        if (limitService.isLimited('members')) {
-            // You can't publish a post if you're over your member limit
-            if ((isEdit && isChanging('status') && isDraft()) || (isAdd && isPublished())) {
-                await limitService.errorIfIsOverLimit('members');
-            }
-        }
 
         if (isContributor && isEdit) {
             // Only allow contributor edit if status is changing, and the post is a draft post

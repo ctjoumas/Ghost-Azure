@@ -88,9 +88,8 @@ const mapSettings = (attrs, frame) => {
     extraAttrs.forSettings(attrs, frame);
 
     if (_.isArray(attrs)) {
-        const DEPRECATED_KEYS = ['lang', 'timezone', 'accent_color', 'slack_url', 'slack_username'];
         attrs = _.filter(attrs, (o) => {
-            return !DEPRECATED_KEYS.includes(o.key);
+            return o.key !== 'lang' && o.key !== 'timezone' && o.key !== 'accent_color';
         });
     } else {
         delete attrs.lang;

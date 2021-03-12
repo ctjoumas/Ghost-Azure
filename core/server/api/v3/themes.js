@@ -1,6 +1,5 @@
 const {events} = require('../../lib/common');
 const themeService = require('../../../frontend/services/themes');
-const limitService = require('../../services/limits');
 const models = require('../../models');
 
 module.exports = {
@@ -52,11 +51,7 @@ module.exports = {
         permissions: {
             method: 'add'
         },
-        async query(frame) {
-            if (limitService.isLimited('customThemes')) {
-                await limitService.errorIfWouldGoOverLimit('customThemes');
-            }
-
+        query(frame) {
             // @NOTE: consistent filename uploads
             frame.options.originalname = frame.file.originalname.toLowerCase();
 
