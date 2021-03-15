@@ -99,7 +99,7 @@ module.exports = {
     getPublic() {
         let settings = {};
 
-        _.each(publicSettings, (key, newKey) => {
+        _.each(publicSettings, (newKey, key) => {
             settings[newKey] = doGet(key) || null;
         });
 

@@ -9,7 +9,9 @@ module.exports.formattedMemberResponse = function formattedMemberResponse(member
         firstname: member.name && member.name.split(' ')[0],
         avatar_image: member.avatar_image,
         subscribed: !!member.subscribed,
-        subscriptions: member.subscriptions || [],
-        paid: member.status !== 'free'
+        subscriptions: member.stripe ? member.stripe.subscriptions : [],
+        paid: member.stripe && member.stripe.subscriptions && member.stripe.subscriptions.filter((subscription) => {
+            return ['active', 'trialing', 'unpaid', 'past_due'].includes(subscription.status);
+        }).length !== 0
     };
 };

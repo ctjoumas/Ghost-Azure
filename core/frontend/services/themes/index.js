@@ -1,5 +1,6 @@
 const _ = require('lodash');
 const debug = require('ghost-ignition').debug('themes');
+const {events} = require('../../../server/lib/common');
 const {i18n: commonI18n} = require('../proxy');
 const logging = require('../../../shared/logging');
 const errors = require('@tryghost/errors');
@@ -21,6 +22,12 @@ module.exports = {
         i18n.init(activeThemeName);
 
         debug('init themes', activeThemeName);
+
+        // Register a listener for server-start to load all themes
+        events.on('server.start', function readAllThemesOnServerStart() {
+            themeLoader.loadAllThemes();
+        });
+
         // Just read the active theme for now
         return themeLoader
             .loadOneTheme(activeThemeName)
@@ -102,11 +109,5 @@ module.exports = {
     },
     storage: require('./storage'),
     middleware: require('./middleware'),
-    loadCoreHelpers: require('./handlebars/helpers').loadCoreHelpers,
-    /**
-     * Load all inactive themes
-     */
-    loadInactiveThemes: async () => {
-        return await themeLoader.loadAllThemes();
-    }
+    loadCoreHelpers: require('./handlebars/helpers').loadCoreHelpers
 };

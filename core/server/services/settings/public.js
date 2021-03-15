@@ -16,7 +16,6 @@ module.exports = {
     facebook: 'facebook',
     twitter: 'twitter',
     lang: 'lang',
-    locale: 'lang',
     timezone: 'timezone',
     codeinjection_head: 'codeinjection_head',
     codeinjection_foot: 'codeinjection_foot',

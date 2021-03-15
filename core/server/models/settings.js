@@ -8,7 +8,7 @@ const ghostBookshelf = require('./base');
 const {i18n} = require('../lib/common');
 const errors = require('@tryghost/errors');
 const validation = require('../data/validation');
-const urlUtils = require('../../shared/url-utils');
+const settingsCache = require('../services/settings/cache');
 const internalContext = {context: {internal: true}};
 let Settings;
 let defaultSettings;
@@ -146,10 +146,6 @@ Settings = ghostBookshelf.Model.extend({
             }
         }
 
-        if (attrs.value && ['cover_image', 'logo', 'icon', 'portal_button_icon', 'og_image', 'twitter_image'].includes(attrs.key)) {
-            attrs.value = urlUtils.toTransformReady(attrs.value);
-        }
-
         return attrs;
     },
 
@@ -165,11 +161,6 @@ Settings = ghostBookshelf.Model.extend({
         // transform "false" to false for boolean type
         if (settingType === 'boolean' && (attrs.value === 'false' || attrs.value === 'true')) {
             attrs.value = JSON.parse(attrs.value);
-        }
-
-        // transform URLs from __GHOST_URL__ to absolute
-        if (['cover_image', 'logo', 'icon', 'portal_button_icon', 'og_image', 'twitter_image'].includes(attrs.key)) {
-            attrs.value = urlUtils.transformReadyToAbsolute(attrs.value);
         }
 
         return attrs;
@@ -307,6 +298,25 @@ Settings = ghostBookshelf.Model.extend({
     },
 
     permissible: function permissible(modelId, action, context, unsafeAttrs, loadedPermissions, hasUserPermission, hasApiKeyPermission) {
+        let isEdit = (action === 'edit');
+        let isOwner;
+
+        function isChangingMembers() {
+            if (unsafeAttrs && unsafeAttrs.key === 'labs') {
+                let editedValue = JSON.parse(unsafeAttrs.value);
+                if (editedValue.members !== undefined) {
+                    return editedValue.members !== settingsCache.get('labs').members;
+                }
+            }
+        }
+
+        isOwner = loadedPermissions.user && _.some(loadedPermissions.user.roles, {name: 'Owner'});
+
+        if (isEdit && isChangingMembers()) {
+            // Only allow owner to toggle members flag
+            hasUserPermission = isOwner;
+        }
+
         if (hasUserPermission && hasApiKeyPermission) {
             return Promise.resolve();
         }
@@ -394,11 +404,11 @@ Settings = ghostBookshelf.Model.extend({
                 return;
             }
 
-            const publishableKeyRegex = /pk_(?:test|live)_[\da-zA-Z]{1,247}$/;
+            const secretKeyRegex = /pk_(?:test|live)_[\da-zA-Z]{1,247}$/;
 
-            if (!publishableKeyRegex.test(value)) {
+            if (!secretKeyRegex.test(value)) {
                 throw new errors.ValidationError({
-                    message: `stripe_publishable_key did not match ${publishableKeyRegex}`
+                    message: `stripe_secret_key did not match ${secretKeyRegex}`
                 });
             }
         },
@@ -422,11 +432,11 @@ Settings = ghostBookshelf.Model.extend({
                 return;
             }
 
-            const publishableKeyRegex = /pk_(?:test|live)_[\da-zA-Z]{1,247}$/;
+            const secretKeyRegex = /pk_(?:test|live)_[\da-zA-Z]{1,247}$/;
 
-            if (!publishableKeyRegex.test(value)) {
+            if (!secretKeyRegex.test(value)) {
                 throw new errors.ValidationError({
-                    message: `stripe_publishable_key did not match ${publishableKeyRegex}`
+                    message: `stripe_secret_key did not match ${secretKeyRegex}`
                 });
             }
         }
